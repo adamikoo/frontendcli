@@ -118,6 +118,123 @@ class AgentPanel(
         addSystemMessage("Antigravity Mobile IDE ready. Enter instructions to edit code, execute commands, or run tests.")
     }
 
+    private var setupCardView: View? = null
+
+    fun showBridgeSetupCard(onRetry: () -> Unit) {
+        if (setupCardView != null) return
+
+        val termuxCmd = "pkg install -y python curl && curl -sL https://raw.githubusercontent.com/adamikoo/frontendcli/main/bridge/start.sh -o ~/start.sh && bash ~/start.sh"
+
+        val card = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.bg_rounded_card)
+            setPadding(28, 24, 28, 24)
+            val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = 24
+            }
+            layoutParams = lp
+        }
+
+        val title = TextView(context).apply {
+            text = "⚡ Termux Bridge Setup Required"
+            setTextColor(Color.parseColor("#F1F5F9"))
+            textSize = 13.5f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        card.addView(title)
+
+        val desc = TextView(context).apply {
+            text = "To start the background bridge, copy and paste this universal command into Termux:"
+            setTextColor(Color.parseColor("#94A3B8"))
+            textSize = 12f
+            setPadding(0, 8, 0, 12)
+        }
+        card.addView(desc)
+
+        val codeBox = TextView(context).apply {
+            text = termuxCmd
+            setTextColor(Color.parseColor("#38BDF8"))
+            typeface = Typeface.MONOSPACE
+            textSize = 11f
+            setPadding(16, 16, 16, 16)
+            setBackgroundColor(Color.parseColor("#0F172A"))
+        }
+        card.addView(codeBox)
+
+        val btnRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 14, 0, 0)
+        }
+
+        val copyBtn = Button(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = 6
+            }
+            text = "📋 Copy"
+            textSize = 11.5f
+            setTextColor(Color.WHITE)
+            setBackgroundResource(R.drawable.bg_chip)
+            setOnClickListener {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                val clip = android.content.ClipData.newPlainText("Termux Command", termuxCmd)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(context, "Command copied! Switch to Termux and paste.", Toast.LENGTH_SHORT).show()
+            }
+        }
+        btnRow.addView(copyBtn)
+
+        val openTermuxBtn = Button(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = 6
+                marginEnd = 6
+            }
+            text = "🚀 Termux"
+            textSize = 11.5f
+            setTextColor(Color.WHITE)
+            setBackgroundResource(R.drawable.bg_chip)
+            setOnClickListener {
+                try {
+                    val intent = context.packageManager.getLaunchIntentForPackage("com.termux")
+                    if (intent != null) {
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                    } else {
+                        Toast.makeText(context, "Termux not installed. Please install from F-Droid.", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Cannot open Termux: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        btnRow.addView(openTermuxBtn)
+
+        val retryBtn = Button(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = 6
+            }
+            text = "🔄 Retry"
+            textSize = 11.5f
+            setTextColor(Color.WHITE)
+            setBackgroundResource(R.drawable.bg_chip)
+            setOnClickListener {
+                onRetry()
+            }
+        }
+        btnRow.addView(retryBtn)
+
+        card.addView(btnRow)
+
+        setupCardView = card
+        messagesContainer.addView(card, 0)
+    }
+
+    fun hideBridgeSetupCard() {
+        setupCardView?.let {
+            messagesContainer.removeView(it)
+            setupCardView = null
+        }
+    }
+
     fun addSystemMessage(text: String) {
         val tv = TextView(context).apply {
             this.text = text

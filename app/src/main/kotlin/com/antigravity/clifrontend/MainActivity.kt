@@ -262,9 +262,11 @@ class MainActivity : Activity() {
                 explorerPanel.currentPath = h.workspace
                 changesPanel.workspace = h.workspace
                 terminalPanel.cwd = h.workspace
+                agentPanel.hideBridgeSetupCard()
             }.onFailure {
                 tvConnectionStatus.text = "○ Offline (Tap for setup)"
                 tvConnectionStatus.setTextColor(Color.parseColor("#EF4444"))
+                agentPanel.showBridgeSetupCard { checkHealth() }
             }
         }
     }
