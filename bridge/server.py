@@ -9,11 +9,6 @@ import os
 import sys
 import json
 import time
-import pty
-import select
-import fcntl
-import termios
-import struct
 import signal
 import shutil
 import urllib.parse
@@ -48,16 +43,23 @@ def resolve_default_workspace():
     env_ws = os.environ.get("DEFAULT_WORKSPACE")
     if env_ws and os.path.exists(env_ws):
         return os.path.abspath(env_ws)
+    cwd = os.getcwd()
+    if os.path.exists(os.path.join(cwd, ".git")) or os.path.exists(os.path.join(cwd, "CLIFrontend.apk")):
+        return os.path.abspath(cwd)
+    # Check if parent has .git (e.g. if run from bridge/)
+    parent = os.path.dirname(cwd)
+    if os.path.exists(os.path.join(parent, ".git")) or os.path.exists(os.path.join(parent, "CLIFrontend.apk")):
+        return os.path.abspath(parent)
     candidates = [
         "/root",
-        os.path.expanduser("~"),
         "/data/data/com.termux/files/home",
-        os.getcwd()
+        os.path.expanduser("~"),
+        cwd
     ]
     for c in candidates:
         if os.path.exists(c) and os.access(c, os.R_OK):
             return os.path.abspath(c)
-    return os.path.abspath(os.getcwd())
+    return os.path.abspath(cwd)
 
 def resolve_token_file():
     candidates = [
@@ -444,6 +446,26 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self.send_cors_headers()
             self.end_headers()
 
+            # Dev fallback if AGY is not installed locally on this test PC
+            if not os.path.exists(AGY_BIN) and not shutil.which(AGY_BIN):
+                mock_chunks = [
+                    "**[Bridge Dev Mode]** Antigravity CLI (`agy`) is not installed on this local testing machine.\n\n",
+                    f"• **Received Prompt:** *{prompt}*\n",
+                    f"• **Selected Model:** `{model or 'Gemini 3.8 Flash'}`\n",
+                    f"• **Reasoning Effort:** `{effort or 'medium'}`\n",
+                    f"• **Target Workspace:** `{current_workspace}`\n\n",
+                    "When deployed to your phone in Termux or Ubuntu PRoot, the bridge will stream responses directly from your authenticated `agy` agent!\n"
+                ]
+                for chunk in mock_chunks:
+                    payload_line = json.dumps({"event": "chunk", "text": chunk})
+                    self.wfile.write(f"data: {payload_line}\n\n".encode("utf-8"))
+                    self.wfile.flush()
+                    time.sleep(0.08)
+                self.wfile.write(f"data: {json.dumps({'event': 'exit', 'exit_code': 0})}\n\n".encode("utf-8"))
+                self.wfile.flush()
+                self.close_connection = True
+                return
+
             try:
                 active_agent_process = subprocess.Popen(
                     cmd,
@@ -472,6 +494,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 self.wfile.write(f"data: {err_data}\n\n".encode("utf-8"))
                 self.wfile.flush()
             finally:
+                self.close_connection = True
                 active_agent_process = None
 
         else:
