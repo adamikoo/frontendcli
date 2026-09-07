@@ -1,0 +1,61 @@
+name: Build and Commit Release APK
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'app/**'
+      - 'scripts/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android Build-Tools & Platform 34
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Install Kotlin Compiler
+        run: |
+          curl -sSL https://github.com/JetBrains/kotlin/releases/download/v1.9.24/kotlin-compiler-1.9.24.zip -o kotlinc.zip
+          sudo unzip -q kotlinc.zip -d /opt
+          sudo ln -s /opt/kotlinc/bin/kotlinc /usr/local/bin/kotlinc
+
+      - name: Compile and Sign Release APK
+        run: |
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          chmod +x scripts/build.sh
+          ./scripts/build.sh
+
+      - name: Commit and Push Updated APK
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add CLIFrontend.apk
+          if git diff --staged --quiet; then
+            echo "No changes in CLIFrontend.apk"
+          else
+            git commit -m "chore(release): compile and update CLIFrontend.apk with latest UI"
+            git push origin main
+          fi
