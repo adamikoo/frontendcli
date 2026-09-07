@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_app">#121418</color>
+    <color name="bg_surface">#1A1D23</color>
+    <color name="bg_surface_elevated">#232832</color>
+    <color name="bg_editor">#15181E</color>
+    <color name="bg_terminal">#0C0E12</color>
+    <color name="border">#2C323D</color>
+    <color name="border_active">#3B82F6</color>
+    <color name="primary">#3B82F6</color>
+    <color name="primary_variant">#2563EB</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="accent_green">#10B981</color>
+    <color name="accent_amber">#F59E0B</color>
+    <color name="accent_red">#EF4444</color>
+    <color name="accent_purple">#8B5CF6</color>
+    <color name="text_primary">#F1F5F9</color>
+    <color name="text_secondary">#94A3B8</color>
+    <color name="text_muted">#64748B</color>
+    <color name="line_number">#475569</color>
+    <color name="diff_add_bg">#1A2E23</color>
+    <color name="diff_add_text">#34D399</color>
+    <color name="diff_del_bg">#331A1E</color>
+    <color name="diff_del_text">#F87171</color>
+</resources>

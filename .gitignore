@@ -1,0 +1,18 @@
+# Build output and temporary files
+app/build/
+.gradle/
+*.log
+*.pid
+bridge/bridge.log
+bridge/bridge.pid
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE and OS
+.idea/
+*.iml
+.DS_Store
+Thumbs.db

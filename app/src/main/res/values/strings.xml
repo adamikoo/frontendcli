@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CLIFrontend</string>
+    <string name="title_agent">Agent</string>
+    <string name="title_editor">Editor</string>
+    <string name="title_explorer">Files</string>
+    <string name="title_changes">Changes</string>
+    <string name="title_terminal">Terminal</string>
+    <string name="title_settings">Settings</string>
+    <string name="title_diagnostics">Diagnostics</string>
+    <string name="prompt_hint">Ask Antigravity to build, edit, or refactor...</string>
+    <string name="status_ready">Ready</string>
+    <string name="status_thinking">Thinking...</string>
+    <string name="status_working">Working...</string>
+    <string name="status_running">Running command...</string>
+    <string name="status_editing">Editing files...</string>
+    <string name="status_error">Error</string>
+    <string name="btn_send">Send</string>
+    <string name="btn_stop">Stop</string>
+    <string name="btn_save">Save</string>
+    <string name="btn_refresh">Refresh</string>
+    <string name="btn_reconnect">Reconnect</string>
+</resources>
