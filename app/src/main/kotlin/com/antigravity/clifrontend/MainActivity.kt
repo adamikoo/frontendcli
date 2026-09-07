@@ -169,8 +169,12 @@ class MainActivity : Activity() {
         }
 
         tvConnectionStatus.setOnClickListener {
-            checkHealth()
-            Toast.makeText(this, "Checking connection...", Toast.LENGTH_SHORT).show()
+            if (tvConnectionStatus.text.toString().contains("Offline")) {
+                showTermuxSetupDialog()
+            } else {
+                checkHealth()
+                Toast.makeText(this, "Checking connection...", Toast.LENGTH_SHORT).show()
+            }
         }
 
         chipModel.setOnClickListener {
@@ -180,6 +184,38 @@ class MainActivity : Activity() {
         chipEffort.setOnClickListener {
             showEffortPicker()
         }
+    }
+
+    private fun showTermuxSetupDialog() {
+        val termuxCmd = "pkg install -y python curl && curl -sL https://raw.githubusercontent.com/adamikoo/frontendcli/main/bridge/start.sh -o ~/start.sh && bash ~/start.sh"
+        
+        AlertDialog.Builder(this)
+            .setTitle("Termux Bridge Setup")
+            .setMessage("Run this 1-line command in Termux to start the background bridge. It works on any device:\n\n$termuxCmd")
+            .setPositiveButton("📋 Copy Command") { _, _ ->
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                val clip = android.content.ClipData.newPlainText("Termux Command", termuxCmd)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(this, "Command copied! Switch to Termux and paste.", Toast.LENGTH_LONG).show()
+            }
+            .setNeutralButton("🚀 Open Termux") { _, _ ->
+                try {
+                    val intent = packageManager.getLaunchIntentForPackage("com.termux")
+                    if (intent != null) {
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(intent)
+                    } else {
+                        Toast.makeText(this, "Termux not found. Please install Termux from F-Droid or GitHub.", Toast.LENGTH_LONG).show()
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Could not open Termux: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Diagnostics") { _, _ ->
+                switchTab(Tab.DIAGNOSTICS)
+                diagnosticsPanel.runDiagnostics()
+            }
+            .show()
     }
 
     private fun switchTab(tab: Tab) {
@@ -227,7 +263,7 @@ class MainActivity : Activity() {
                 changesPanel.workspace = h.workspace
                 terminalPanel.cwd = h.workspace
             }.onFailure {
-                tvConnectionStatus.text = "○ Offline"
+                tvConnectionStatus.text = "○ Offline (Tap for setup)"
                 tvConnectionStatus.setTextColor(Color.parseColor("#EF4444"))
             }
         }

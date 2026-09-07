@@ -24,6 +24,35 @@ Android Phone
 
 ---
 
+## ⚡ Quickstart (Zero-Setup in 60 Seconds)
+
+### Step 1: Install the Android App
+Download and install [**CLIFrontend.apk**](CLIFrontend.apk) on your Android phone.
+
+### Step 2: Start the Bridge in Termux
+Open **Termux** on your phone and run this universal 1-line command:
+
+```bash
+pkg install -y python curl 2>/dev/null; curl -sL https://raw.githubusercontent.com/adamikoo/frontendcli/main/bridge/start.sh -o ~/start.sh && bash ~/start.sh
+```
+
+> **Why this works anywhere on any Android device:**
+> - **Zero guesswork**: Doesn't matter what folder you downloaded files to or where you run it from.
+> - **Self-healing**: Automatically locates `server.py` across common download folders, or auto-fetches it directly from the repo.
+> - **Auto-install**: Installs `python` and `curl` in Termux automatically if missing.
+> - **Background-proof**: Automatically acquires `termux-wake-lock` to prevent Android battery optimizations from killing the bridge.
+
+*(If you already downloaded `start.sh` manually to your phone's Android Downloads folder, you can also run:*
+```bash
+bash $(find /sdcard/Download -name "start.sh" 2>/dev/null || echo ~/start.sh)
+```
+*)*
+
+### Step 3: Open CLIFrontend
+Open the **CLIFrontend** app on your phone. It will immediately show **● Connected** and load your workspace!
+
+---
+
 ## 1. Features
 
 - **Genuine Native Android Experience**: Built with modern Kotlin, Android SDK 34, native UI components, and developer-grade dark theme (slate/navy palette). No fake WebView wraps.

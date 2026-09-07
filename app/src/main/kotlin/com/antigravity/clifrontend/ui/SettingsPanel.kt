@@ -73,6 +73,14 @@ class SettingsPanel(
                 .show()
         }
 
+        val termuxCmd = "pkg install -y python curl && curl -sL https://raw.githubusercontent.com/adamikoo/frontendcli/main/bridge/start.sh -o ~/start.sh && bash ~/start.sh"
+        addSettingRow("Termux Launch Command", "Tap to copy") {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clip = android.content.ClipData.newPlainText("Termux Command", termuxCmd)
+            clipboard.setPrimaryClip(clip)
+            Toast.makeText(context, "Termux command copied to clipboard!", Toast.LENGTH_SHORT).show()
+        }
+
         // Section: AI Configuration
         addSectionHeader("AI Agent Configuration")
         addSettingRow("Thinking / Reasoning Effort", "Tap to change") {

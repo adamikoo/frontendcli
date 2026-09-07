@@ -5,8 +5,18 @@
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PORT="${PORT:-8765}"
-PID_FILE="$DIR/bridge.pid"
-LOG_FILE="$DIR/bridge.log"
+
+# Ensure a safe, writable POSIX directory for pid and log files
+if [ -d "$HOME" ] && [ -w "$HOME" ]; then
+    RUN_DIR="$HOME/.frontendcli"
+else
+    RUN_DIR="$DIR"
+fi
+mkdir -p "$RUN_DIR" 2>/dev/null || RUN_DIR="/tmp/.frontendcli"
+mkdir -p "$RUN_DIR" 2>/dev/null || true
+
+PID_FILE="$RUN_DIR/bridge.pid"
+LOG_FILE="$RUN_DIR/bridge.log"
 
 action="${1:-start}"
 
@@ -18,6 +28,77 @@ find_python() {
     else
         echo ""
     fi
+}
+
+find_server_script() {
+    # 1. Check relative to start.sh location
+    if [ -f "$DIR/server.py" ]; then
+        echo "$DIR/server.py"
+        return 0
+    fi
+    if [ -f "$DIR/bridge/server.py" ]; then
+        echo "$DIR/bridge/server.py"
+        return 0
+    fi
+
+    # 2. Check current working directory
+    if [ -f "$(pwd)/server.py" ]; then
+        echo "$(pwd)/server.py"
+        return 0
+    fi
+    if [ -f "$(pwd)/bridge/server.py" ]; then
+        echo "$(pwd)/bridge/server.py"
+        return 0
+    fi
+
+    # 3. Check home & project clone locations
+    if [ -f "$HOME/frontendcli/bridge/server.py" ]; then
+        echo "$HOME/frontendcli/bridge/server.py"
+        return 0
+    fi
+    if [ -f "$RUN_DIR/server.py" ]; then
+        echo "$RUN_DIR/server.py"
+        return 0
+    fi
+
+    # 4. Check Android standard download folders
+    for cand in \
+        "/sdcard/Download/server.py" \
+        "/sdcard/Download/bridge/server.py" \
+        "/sdcard/Download/frontendcli/bridge/server.py" \
+        "/storage/emulated/0/Download/server.py" \
+        "/storage/emulated/0/Download/bridge/server.py" \
+        "/storage/emulated/0/Download/frontendcli/bridge/server.py" \
+        "$HOME/storage/downloads/server.py" \
+        "$HOME/storage/downloads/bridge/server.py"; do
+        if [ -f "$cand" ]; then
+            echo "$cand"
+            return 0
+        fi
+    done
+
+    # 5. Search with find (capped depth)
+    local found
+    found=$(find "$HOME" /sdcard/Download /storage/emulated/0/Download "$HOME/storage/downloads" -maxdepth 4 -name "server.py" 2>/dev/null | head -n 1)
+    if [ -n "$found" ] && [ -f "$found" ]; then
+        echo "$found"
+        return 0
+    fi
+
+    # 6. Fallback: Automatically download server.py from GitHub
+    echo "[INFO] server.py not found on device; auto-downloading from GitHub repository..." >&2
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "https://raw.githubusercontent.com/adamikoo/frontendcli/main/bridge/server.py" -o "$RUN_DIR/server.py" 2>/dev/null
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q "https://raw.githubusercontent.com/adamikoo/frontendcli/main/bridge/server.py" -O "$RUN_DIR/server.py" 2>/dev/null
+    fi
+
+    if [ -f "$RUN_DIR/server.py" ]; then
+        echo "$RUN_DIR/server.py"
+        return 0
+    fi
+
+    return 1
 }
 
 kill_port_process() {
@@ -104,9 +185,26 @@ case "$action" in
     restart|start)
         PY_BIN=$(find_python)
         if [ -z "$PY_BIN" ]; then
-            echo "[ERROR] Python 3 is not installed!"
-            echo "  In Termux, run: pkg install python"
-            echo "  In Ubuntu, run: apt update && apt install -y python3"
+            echo "[INFO] Python 3 is not installed. Attempting auto-install..."
+            if command -v pkg >/dev/null 2>&1; then
+                pkg install -y python || true
+            elif command -v apt-get >/dev/null 2>&1; then
+                apt-get update && apt-get install -y python3 || true
+            fi
+            PY_BIN=$(find_python)
+        fi
+
+        if [ -z "$PY_BIN" ]; then
+            echo "[ERROR] Python 3 is required but could not be installed."
+            echo "  In Termux, please run: pkg install -y python"
+            exit 1
+        fi
+
+        # Find server.py anywhere on device or auto-fetch
+        SERVER_SCRIPT=$(find_server_script)
+        if [ -z "$SERVER_SCRIPT" ] || [ ! -f "$SERVER_SCRIPT" ]; then
+            echo "[ERROR] Could not find or download server.py!"
+            echo "Please check internet connection or clone repo: git clone https://github.com/adamikoo/frontendcli.git"
             exit 1
         fi
 
@@ -122,9 +220,9 @@ case "$action" in
             sleep 1
         fi
 
-        echo "Starting CLIFrontend Bridge on port $PORT..."
+        echo "Starting CLIFrontend Bridge from $SERVER_SCRIPT on port $PORT..."
         > "$LOG_FILE"
-        nohup $PY_BIN "$DIR/server.py" >> "$LOG_FILE" 2>&1 &
+        nohup $PY_BIN "$SERVER_SCRIPT" >> "$LOG_FILE" 2>&1 &
         NEW_PID=$!
         echo "$NEW_PID" > "$PID_FILE"
 
@@ -158,6 +256,7 @@ case "$action" in
             echo "=================================================="
             echo "✓ CLIFrontend Bridge is running and healthy!"
             echo "  PID:       $NEW_PID"
+            echo "  Script:    $SERVER_SCRIPT"
             echo "  URL:       http://127.0.0.1:$PORT"
             echo "  Health:    http://127.0.0.1:$PORT/api/health"
             echo "  Logs:      $LOG_FILE"

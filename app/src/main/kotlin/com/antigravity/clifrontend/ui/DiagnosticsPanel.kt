@@ -101,16 +101,94 @@ class DiagnosticsPanel(
                     cardsContainer.addView(loginBtn)
                 }
             }.onFailure { err ->
-                addTierCard("Localhost Bridge", false, "Bridge unreachable on http://127.0.0.1:8765 (${err.message}).")
-                val helperTv = TextView(context).apply {
-                    text = "To start the bridge, open Termux and run:\n\nproot-distro login ubuntu -- /downloads/clifrontend/bridge/start.sh"
-                    setTextColor(Color.parseColor("#F59E0B"))
-                    typeface = Typeface.MONOSPACE
-                    textSize = 11.5f
-                    setPadding(24, 24, 24, 24)
+                addTierCard("Localhost Bridge", false, "Bridge unreachable on http://127.0.0.1:8765 (${err.message ?: "Connection refused"}).")
+                
+                val helperBox = LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
                     setBackgroundResource(R.drawable.bg_rounded_card)
+                    setPadding(24, 24, 24, 24)
+                    val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                        bottomMargin = 16
+                    }
+                    layoutParams = lp
                 }
-                cardsContainer.addView(helperTv)
+
+                val promptTitle = TextView(context).apply {
+                    text = "Start Bridge in Termux"
+                    setTextColor(Color.parseColor("#F1F5F9"))
+                    textSize = 13f
+                    typeface = Typeface.DEFAULT_BOLD
+                }
+                helperBox.addView(promptTitle)
+
+                val promptDesc = TextView(context).apply {
+                    text = "Run this universal 1-line command in Termux. It works from any directory on any device:"
+                    setTextColor(Color.parseColor("#94A3B8"))
+                    textSize = 11.5f
+                    setPadding(0, 6, 0, 12)
+                }
+                helperBox.addView(promptDesc)
+
+                val termuxCmd = "pkg install -y python curl && curl -sL https://raw.githubusercontent.com/adamikoo/frontendcli/main/bridge/start.sh -o ~/start.sh && bash ~/start.sh"
+
+                val cmdTv = TextView(context).apply {
+                    text = termuxCmd
+                    setTextColor(Color.parseColor("#38BDF8"))
+                    typeface = Typeface.MONOSPACE
+                    textSize = 11f
+                    setPadding(16, 16, 16, 16)
+                    setBackgroundColor(Color.parseColor("#0F172A"))
+                }
+                helperBox.addView(cmdTv)
+
+                val btnRow = LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    setPadding(0, 14, 0, 0)
+                }
+
+                val copyBtn = Button(context).apply {
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        marginEnd = 8
+                    }
+                    text = "📋 Copy Command"
+                    textSize = 11.5f
+                    setTextColor(Color.WHITE)
+                    setBackgroundResource(R.drawable.bg_chip)
+                    setOnClickListener {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("Termux Command", termuxCmd)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, "Command copied to clipboard! Paste into Termux.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                btnRow.addView(copyBtn)
+
+                val openTermuxBtn = Button(context).apply {
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        marginStart = 8
+                    }
+                    text = "🚀 Open Termux"
+                    textSize = 11.5f
+                    setTextColor(Color.WHITE)
+                    setBackgroundResource(R.drawable.bg_chip)
+                    setOnClickListener {
+                        try {
+                            val intent = context.packageManager.getLaunchIntentForPackage("com.termux")
+                            if (intent != null) {
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(intent)
+                            } else {
+                                Toast.makeText(context, "Termux not installed. Install from F-Droid or Play Store.", Toast.LENGTH_LONG).show()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Could not launch Termux: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                btnRow.addView(openTermuxBtn)
+
+                helperBox.addView(btnRow)
+                cardsContainer.addView(helperBox)
             }
         }
     }
