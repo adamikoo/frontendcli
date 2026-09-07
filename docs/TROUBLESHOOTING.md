@@ -1,13 +1,30 @@
 # Troubleshooting CLIFrontend
 
 ## 1. Connection & Diagnostics
-If the app shows "Bridge Offline":
-- Check if Termux is running in the background.
-- Open Termux and verify the bridge is running:
+If the app shows "Bridge Offline" or "Can't connect":
+- Verify the bridge status in Termux or Ubuntu:
   ```bash
-  proot-distro login ubuntu -- ps aux | grep server.py
+  cd /downloads/clifrontend/bridge   # or path to your clifrontend folder
+  ./status.sh
   ```
-- If not running, start it:
+- If stopped or unresponsive, restart it with health check verification:
+  ```bash
+  ./start.sh restart
+  ```
+  The script automatically checks if the process crashed, probes `http://127.0.0.1:8765/api/health`, and shows the exact log if it failed.
+
+- Check the live log output:
+  ```bash
+  ./start.sh logs
+  ```
+
+- Prevent Android from sleeping/freezing the Termux process:
+  ```bash
+  termux-wake-lock
+  ```
+  Ensure Android Battery Optimization for Termux is set to "Unrestricted".
+
+- If running inside Ubuntu PRoot:
   ```bash
   proot-distro login ubuntu -- /downloads/clifrontend/bridge/start.sh
   ```
