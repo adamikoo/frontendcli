@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLIFrontend — Mobile IDE Dev Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #0B0D11;
+      --bg-panel: #121418;
+      --bg-card: #1A1D23;
+      --bg-input: #23272F;
+      --border-subtle: #2D333B;
+      --text-main: #F1F5F9;
+      --text-muted: #94A3B8;
+      --text-dim: #64748B;
+      --primary: #3B82F6;
+      --primary-hover: #2563EB;
+      --primary-glow: rgba(59, 130, 246, 0.25);
+      --accent-green: #10B981;
+      --accent-yellow: #F59E0B;
+      --accent-red: #EF4444;
+      --accent-cyan: #38BDF8;
+      --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-code: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-base);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top Global Header */
+    header.top-header {
+      background: #0E1015;
+      border-bottom: 1px solid var(--border-subtle);
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      user-select: none;
+      z-index: 100;
+    }
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-badge {
+      background: linear-gradient(135deg, #2563EB, #7C3AED);
+      color: #fff;
+      font-weight: 700;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+    .app-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+    .workspace-path {
+      font-family: var(--font-code);
+      font-size: 12px;
+      color: var(--text-dim);
+      background: var(--bg-card);
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border-subtle);
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .top-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--accent-green);
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .status-pill.offline {
+      background: rgba(239, 68, 68, 0.12);
+      color: var(--accent-red);
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .chip-btn {
+      background: var(--bg-card);
+      color: var(--text-muted);
+      border: 1px solid var(--border-subtle);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .chip-btn:hover {
+      background: #252A33;
+      color: var(--text-main);
+      border-color: #3B4252;
+    }
+
+    /* Main IDE Layout */
+    .app-body {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 52px);
+      position: relative;
+    }
+
+    /* Navigation Sidebar */
+    .nav-bar {
+      width: 64px;
+      background: #0E1015;
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 0;
+      gap: 8px;
+      z-index: 50;
+    }
+    .nav-item {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all 0.2s;
+      user-select: none;
+    }
+    .nav-item svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .nav-item span { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+    .nav-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+    }
+    .nav-item.active {
+      background: var(--primary-glow);
+      color: var(--primary);
+      box-shadow: inset 0 0 0 1px var(--primary);
+    }
+
+    /* View Containers */
+    .views-container {
+      flex: 1;
+      display: flex;
+      position: relative;
+      background: var(--bg-panel);
+      overflow: hidden;
+    }
+    .view-panel {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      background: var(--bg-panel);
+    }
+    .view-panel.active { display: flex; }
+
+    /* ========================================================= */
+    /* 1. Agent Chat Panel */
+    /* ========================================================= */
+    .chat-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .msg-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 16px;
+      max-width: 820px;
+      line-height: 1.6;
+      font-size: 13.5px;
+    }
+    .msg-user {
+      background: #1E293B;
+      border-color: #334155;
+      margin-left: auto;
+      max-width: 680px;
+    }
+    .msg-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .msg-author {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--accent-green);
+    }
+    .msg-user .msg-author { color: var(--primary); }
+    .msg-body {
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #E2E8F0;
+    }
+    .tool-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--accent-yellow);
+      font-family: var(--font-code);
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      margin: 6px 0;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .token-metrics {
+      font-family: var(--font-code);
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding-top: 6px;
+    }
+
+    .chat-input-bar {
+      background: #0E1015;
+      border-top: 1px solid var(--border-subtle);
+      padding: 12px 16px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+    .chat-textarea {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      font-size: 13.5px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      resize: none;
+      min-height: 44px;
+      max-height: 140px;
+      outline: none;
+    }
+    .chat-textarea:focus { border-color: var(--primary); }
+    .btn-send {
+      width: 44px;
+      height: 44px;
+      background: var(--primary);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .btn-send:hover { background: var(--primary-hover); }
+    .btn-stop {
+      width: 44px;
+      height: 44px;
+      background: var(--accent-red);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* ========================================================= */
+    /* 2. Code Editor Panel */
+    /* ========================================================= */
+    .editor-header {
+      background: #0E1015;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      height: 42px;
+    }
+    .editor-tabs {
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+    }
+    .editor-tab {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      padding: 5px 12px;
+      border-radius: 6px 6px 0 0;
+      font-size: 12px;
+      font-family: var(--font-code);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .editor-tab.active {
+      background: var(--bg-panel);
+      color: var(--text-main);
+      border-bottom-color: var(--bg-panel);
+    }
+    .editor-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .editor-area {
+      flex: 1;
+      display: flex;
+      background: #090B0E;
+    }
+    .editor-line-numbers {
+      width: 48px;
+      background: #0A0C0F;
+      color: var(--text-dim);
+      font-family: var(--font-code);
+      font-size: 12.5px;
+      line-height: 20px;
+      text-align: right;
+      padding: 12px 8px;
+      user-select: none;
+      border-right: 1px solid var(--border-subtle);
+      overflow: hidden;
+    }
+    .editor-textarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #E2E8F0;
+      font-family: var(--font-code);
+      font-size: 12.5px;
+      line-height: 20px;
+      padding: 12px 14px;
+      resize: none;
+      outline: none;
+      white-space: pre;
+      overflow: auto;
+    }
+
+    /* ========================================================= */
+    /* 3. Explorer Panel */
+    /* ========================================================= */
+    .explorer-header {
+      background: #0E1015;
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .file-tree-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .file-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+    .file-row:hover { background: rgba(255, 255, 255, 0.05); }
+    .file-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-main);
+    }
+    .file-icon { font-size: 14px; }
+    .file-meta { font-size: 11px; font-family: var(--font-code); color: var(--text-dim); }
+
+    /* ========================================================= */
+    /* 4. Git Changes Panel */
+    /* ========================================================= */
+    .diff-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .diff-file-list {
+      background: #0E1015;
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 10px 16px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+    }
+    .diff-chip {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: var(--font-code);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .diff-chip.active {
+      border-color: var(--primary);
+      background: #1E293B;
+      color: var(--accent-cyan);
+    }
+    .diff-view {
+      flex: 1;
+      overflow: auto;
+      background: #090B0E;
+      padding: 16px;
+      font-family: var(--font-code);
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .diff-add { color: #34D399; background: rgba(52, 211, 153, 0.08); display: block; }
+    .diff-del { color: #F87171; background: rgba(248, 113, 113, 0.08); display: block; }
+    .diff-hunk { color: #60A5FA; background: rgba(96, 165, 250, 0.08); font-weight: bold; display: block; }
+
+    /* ========================================================= */
+    /* 5. Terminal Console */
+    /* ========================================================= */
+    .terminal-output {
+      flex: 1;
+      background: #06080A;
+      padding: 16px;
+      font-family: var(--font-code);
+      font-size: 12px;
+      color: #38BDF8;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .terminal-input-bar {
+      background: #0E1015;
+      border-top: 1px solid var(--border-subtle);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .terminal-prompt {
+      font-family: var(--font-code);
+      color: var(--accent-green);
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .terminal-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      font-family: var(--font-code);
+      font-size: 13px;
+      outline: none;
+    }
+
+    /* ========================================================= */
+    /* 6. Diagnostics & Settings */
+    /* ========================================================= */
+    .diag-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 800px;
+    }
+    .diag-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 18px;
+    }
+    .diag-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .diag-card-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .diag-status-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 9999px;
+    }
+    .diag-ok { background: rgba(16, 185, 129, 0.15); color: var(--accent-green); }
+    .diag-fail { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); }
+    .diag-desc {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Modal / Popups */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 24px;
+      width: 440px;
+      max-width: 90vw;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    }
+    .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+    .model-option {
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.15s;
+    }
+    .model-option:hover { border-color: var(--primary); background: #2A303C; }
+    .model-option.selected { border-color: var(--primary); background: var(--primary-glow); color: #93C5FD; }
+  </style>
+</head>
+<body>
+
+  <!-- Global Header -->
+  <header class="top-header">
+    <div class="brand-section">
+      <div class="logo-badge">AGY MOBILE IDE</div>
+      <div class="app-title">CLIFrontend</div>
+      <div class="workspace-path" id="headerWorkspace" title="Active Workspace">/workspace</div>
+    </div>
+    <div class="top-controls">
+      <div class="status-pill" id="btnConnectionStatus" onclick="switchTab('diagnostics')">
+        <div class="status-dot"></div>
+        <span id="txtConnectionStatus">Connected</span>
+      </div>
+      <button class="chip-btn" id="btnModelPicker" onclick="openModelModal()">
+        <span>🤖</span>
+        <span id="txtActiveModel">Gemini 3.8 Flash (Medium)</span>
+      </button>
+      <button class="chip-btn" id="btnEffortPicker" onclick="cycleEffort()">
+        <span>⚡</span>
+        <span id="txtActiveEffort">Effort: Medium</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <!-- Left Navigation Bar -->
+    <nav class="nav-bar">
+      <div class="nav-item active" id="nav-agent" onclick="switchTab('agent')">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>Agent</span>
+      </div>
+      <div class="nav-item" id="nav-editor" onclick="switchTab('editor')">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span>Editor</span>
+      </div>
+      <div class="nav-item" id="nav-explorer" onclick="switchTab('explorer')">
+        <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span>Files</span>
+      </div>
+      <div class="nav-item" id="nav-changes" onclick="switchTab('changes')">
+        <svg viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
+        <span>Changes</span>
+      </div>
+      <div class="nav-item" id="nav-terminal" onclick="switchTab('terminal')">
+        <svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        <span>Shell</span>
+      </div>
+      <div class="nav-item" id="nav-diagnostics" onclick="switchTab('diagnostics')">
+        <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span>Diag</span>
+      </div>
+    </nav>
+
+    <!-- Content Panels -->
+    <main class="views-container">
+
+      <!-- 1. Agent Panel -->
+      <section class="view-panel active" id="view-agent">
+        <div class="chat-scroll" id="chatScroll">
+          <div class="msg-card">
+            <div class="msg-header">
+              <span class="msg-author">Antigravity Agent</span>
+            </div>
+            <div class="msg-body">CLIFrontend Standalone Mobile IDE preview online. Enter your instructions below to edit code, execute commands, or run agent workflows.</div>
+          </div>
+        </div>
+        <div class="chat-input-bar">
+          <textarea class="chat-textarea" id="chatInput" rows="1" placeholder="Type a message or instruction for Antigravity agent... (Enter to send)"></textarea>
+          <button class="btn-send" id="btnSendPrompt" onclick="sendAgentPrompt()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </button>
+          <button class="btn-stop" id="btnStopPrompt" onclick="stopAgentPrompt()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- 2. Editor Panel -->
+      <section class="view-panel" id="view-editor">
+        <div class="editor-header">
+          <div class="editor-tabs" id="editorTabs">
+            <div class="editor-tab active" id="currentTabLabel">README.md</div>
+          </div>
+          <div class="editor-actions">
+            <button class="chip-btn" onclick="saveActiveFile()">💾 Save</button>
+            <button class="chip-btn" onclick="switchTab('explorer')">📁 Open</button>
+          </div>
+        </div>
+        <div class="editor-area">
+          <div class="editor-line-numbers" id="lineNumbers">1</div>
+          <textarea class="editor-textarea" id="editorText" spellcheck="false"></textarea>
+        </div>
+      </section>
+
+      <!-- 3. Explorer Panel -->
+      <section class="view-panel" id="view-explorer">
+        <div class="explorer-header">
+          <span style="font-size: 13px; font-weight: 600;" id="explorerCurrentPath">/workspace</span>
+          <div style="display: flex; gap: 8px;">
+            <button class="chip-btn" onclick="promptCreateItem(false)">+ File</button>
+            <button class="chip-btn" onclick="promptCreateItem(true)">+ Folder</button>
+            <button class="chip-btn" onclick="loadExplorerTree()">🔄 Refresh</button>
+          </div>
+        </div>
+        <div class="file-tree-container" id="fileTree"></div>
+      </section>
+
+      <!-- 4. Changes Panel -->
+      <section class="view-panel" id="view-changes">
+        <div class="diff-container">
+          <div class="diff-file-list" id="diffFileList"></div>
+          <div class="diff-view" id="diffView">No Git changes detected in current workspace.</div>
+        </div>
+      </section>
+
+      <!-- 5. Terminal Panel -->
+      <section class="view-panel" id="view-terminal">
+        <div class="terminal-output" id="terminalOutput">CLIFrontend Standalone Shell ready.
+Type shell commands below (e.g. ls -la, git status, agy --version)
+</div>
+        <div class="terminal-input-bar">
+          <span class="terminal-prompt">$</span>
+          <input type="text" class="terminal-input" id="terminalInput" placeholder="Enter shell command...">
+          <button class="chip-btn" onclick="execTerminalCommand()">Run</button>
+        </div>
+      </section>
+
+      <!-- 6. Diagnostics Panel -->
+      <section class="view-panel" id="view-diagnostics">
+        <div class="diag-container" id="diagContainer"></div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Model Selector Modal -->
+  <div class="modal-overlay" id="modelModal">
+    <div class="modal-card">
+      <div class="modal-title">Select Antigravity Model</div>
+      <div id="modelList"></div>
+      <div style="text-align: right; margin-top: 16px;">
+        <button class="chip-btn" onclick="closeModelModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentWorkspace = "/workspace";
+    let activeFilePath = "";
+    let activeFileContent = "";
+    let currentEffort = "medium";
+    let isStreaming = false;
+
+    async function api(path, options = {}) {
+      try {
+        const res = await fetch(path, options);
+        return await res.json();
+      } catch (e) {
+        console.error("API error:", e);
+        return { error: e.message };
+      }
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+
+      const nav = document.getElementById('nav-' + tabId);
+      const view = document.getElementById('view-' + tabId);
+      if (nav) nav.classList.add('active');
+      if (view) view.classList.add('active');
+
+      if (tabId === 'explorer') loadExplorerTree();
+      if (tabId === 'changes') loadGitChanges();
+      if (tabId === 'diagnostics') loadDiagnostics();
+    }
+
+    async function checkHealth() {
+      const h = await api('/api/health');
+      const pill = document.getElementById('btnConnectionStatus');
+      const txt = document.getElementById('txtConnectionStatus');
+      const ws = document.getElementById('headerWorkspace');
+
+      if (h && h.status === 'ok') {
+        pill.classList.remove('offline');
+        txt.innerText = 'Connected';
+        currentWorkspace = h.workspace;
+        ws.innerText = h.workspace;
+        document.getElementById('txtActiveModel').innerText = h.model;
+        document.getElementById('txtActiveEffort').innerText = 'Effort: ' + (h.effort.charAt(0).toUpperCase() + h.effort.slice(1));
+      } else {
+        pill.classList.add('offline');
+        txt.innerText = 'Offline';
+      }
+    }
+
+    // Agent Chat Streaming
+    async function sendAgentPrompt() {
+      const input = document.getElementById('chatInput');
+      const prompt = input.value.trim();
+      if (!prompt || isStreaming) return;
+
+      input.value = '';
+      appendUserMessage(prompt);
+
+      isStreaming = true;
+      document.getElementById('btnSendPrompt').style.display = 'none';
+      document.getElementById('btnStopPrompt').style.display = 'flex';
+
+      const agentCard = createAgentMessageCard();
+      const bodyEl = agentCard.querySelector('.msg-body');
+      const toolEl = agentCard.querySelector('.tool-chip');
+      const tokenEl = agentCard.querySelector('.token-metrics');
+
+      try {
+        const res = await fetch('/api/agent/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: prompt, dangerously_skip_permissions: true })
+        });
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let fullText = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.substring(6).trim();
+              try {
+                const event = JSON.parse(dataStr);
+                if (event.event === 'step_update' && event.step_update) {
+                  const su = event.step_update;
+                  if (su.step_type && su.step_type.includes('tool')) {
+                    toolEl.style.display = 'inline-flex';
+                    toolEl.innerText = '⚙ Running: ' + su.step_type;
+                  }
+                  if (su.text_delta) {
+                    fullText += su.text_delta;
+                    bodyEl.innerText = fullText;
+                    scrollChat();
+                  }
+                  if (su.usage) {
+                    tokenEl.style.display = 'block';
+                    tokenEl.innerText = `Tokens: ${su.usage.total_tokens || 0} (In: ${su.usage.input_tokens || 0}, Out: ${su.usage.output_tokens || 0}, Think: ${su.usage.thinking_tokens || 0})`;
+                  }
+                } else if (event.event === 'chunk' && event.text) {
+                  fullText += event.text;
+                  bodyEl.innerText = fullText;
+                  scrollChat();
+                }
+              } catch (e) {}
+            }
+          }
+        }
+      } catch (err) {
+        bodyEl.innerText = 'Error streaming response: ' + err.message;
+      } finally {
+        isStreaming = false;
+        document.getElementById('btnSendPrompt').style.display = 'flex';
+        document.getElementById('btnStopPrompt').style.display = 'none';
+      }
+    }
+
+    function appendUserMessage(text) {
+      const scroll = document.getElementById('chatScroll');
+      const card = document.createElement('div');
+      card.className = 'msg-card msg-user';
+      card.innerHTML = `<div class="msg-header"><span class="msg-author">You</span></div><div class="msg-body">${escapeHtml(text)}</div>`;
+      scroll.appendChild(card);
+      scrollChat();
+    }
+
+    function createAgentMessageCard() {
+      const scroll = document.getElementById('chatScroll');
+      const card = document.createElement('div');
+      card.className = 'msg-card';
+      card.innerHTML = `
+        <div class="msg-header"><span class="msg-author">Antigravity Agent</span></div>
+        <div class="tool-chip" style="display: none;"></div>
+        <div class="msg-body">Thinking...</div>
+        <div class="token-metrics" style="display: none;"></div>
+      `;
+      scroll.appendChild(card);
+      scrollChat();
+      return card;
+    }
+
+    function scrollChat() {
+      const scroll = document.getElementById('chatScroll');
+      scroll.scrollTop = scroll.scrollHeight;
+    }
+
+    async function stopAgentPrompt() {
+      await api('/api/agent/stop', { method: 'POST' });
+      isStreaming = false;
+      document.getElementById('btnSendPrompt').style.display = 'flex';
+      document.getElementById('btnStopPrompt').style.display = 'none';
+    }
+
+    // Code Editor
+    async function openFileInEditor(path) {
+      const res = await api(`/api/fs/file?path=${encodeURIComponent(path)}`);
+      if (res && res.content !== undefined) {
+        activeFilePath = path;
+        activeFileContent = res.content;
+        document.getElementById('currentTabLabel').innerText = res.name;
+        const ta = document.getElementById('editorText');
+        ta.value = res.content;
+        updateLineNumbers();
+        switchTab('editor');
+      }
+    }
+
+    async function saveActiveFile() {
+      if (!activeFilePath) return;
+      const content = document.getElementById('editorText').value;
+      const res = await api('/api/fs/file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: activeFilePath, content: content })
+      });
+      if (res && res.status === 'ok') {
+        alert('File saved successfully!');
+      } else {
+        alert('Failed to save file: ' + (res.error || 'unknown error'));
+      }
+    }
+
+    function updateLineNumbers() {
+      const ta = document.getElementById('editorText');
+      const count = (ta.value.match(/\n/g) || []).length + 1;
+      let nums = '';
+      for (let i = 1; i <= count; i++) nums += i + '\n';
+      document.getElementById('lineNumbers').innerText = nums;
+    }
+
+    document.getElementById('editorText').addEventListener('input', updateLineNumbers);
+
+    // Explorer
+    async function loadExplorerTree(dir = currentWorkspace) {
+      document.getElementById('explorerCurrentPath').innerText = dir;
+      const res = await api(`/api/fs/tree?path=${encodeURIComponent(dir)}`);
+      const container = document.getElementById('fileTree');
+      container.innerHTML = '';
+
+      if (res && res.items) {
+        res.items.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'file-row';
+          row.innerHTML = `
+            <div class="file-info">
+              <span class="file-icon">${item.is_dir ? '📁' : '📄'}</span>
+              <span>${escapeHtml(item.name)}</span>
+            </div>
+            <span class="file-meta">${item.is_dir ? 'DIR' : formatBytes(item.size)}</span>
+          `;
+          row.onclick = () => {
+            if (item.is_dir) {
+              loadExplorerTree(item.path);
+            } else {
+              openFileInEditor(item.path);
+            }
+          };
+          container.appendChild(row);
+        });
+      }
+    }
+
+    async function promptCreateItem(isDir) {
+      const name = prompt(`Enter ${isDir ? 'folder' : 'file'} name:`);
+      if (!name) return;
+      const path = currentWorkspace + '/' + name;
+      await api('/api/fs/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: path, is_dir: isDir })
+      });
+      loadExplorerTree();
+    }
+
+    // Git Changes
+    async function loadGitChanges() {
+      const res = await api(`/api/git/changes?workspace=${encodeURIComponent(currentWorkspace)}`);
+      const list = document.getElementById('diffFileList');
+      const diffView = document.getElementById('diffView');
+      list.innerHTML = '';
+
+      if (res && res.changes && res.changes.length > 0) {
+        res.changes.forEach((c, idx) => {
+          const chip = document.createElement('div');
+          chip.className = 'diff-chip' + (idx === 0 ? ' active' : '');
+          chip.innerHTML = `<span>${c.status}</span> <span>${escapeHtml(c.path)}</span>`;
+          chip.onclick = () => {
+            document.querySelectorAll('.diff-chip').forEach(x => x.classList.remove('active'));
+            chip.classList.add('active');
+            loadDiff(c.path);
+          };
+          list.appendChild(chip);
+        });
+        loadDiff(res.changes[0].path);
+      } else {
+        diffView.innerText = 'No modified files detected in current Git workspace.';
+      }
+    }
+
+    async function loadDiff(filePath) {
+      const res = await api(`/api/git/diff?workspace=${encodeURIComponent(currentWorkspace)}&path=${encodeURIComponent(filePath)}`);
+      const diffView = document.getElementById('diffView');
+      if (res && res.diff) {
+        diffView.innerHTML = colorizeDiff(res.diff);
+      } else {
+        diffView.innerText = 'No diff available for ' + filePath;
+      }
+    }
+
+    function colorizeDiff(diff) {
+      return diff.split('\n').map(l => {
+        if (l.startsWith('+') && !l.startsWith('+++')) return `<span class="diff-add">${escapeHtml(l)}</span>`;
+        if (l.startsWith('-') && !l.startsWith('---')) return `<span class="diff-del">${escapeHtml(l)}</span>`;
+        if (l.startsWith('@@')) return `<span class="diff-hunk">${escapeHtml(l)}</span>`;
+        return escapeHtml(l);
+      }).join('\n');
+    }
+
+    // Terminal
+    async function execTerminalCommand() {
+      const input = document.getElementById('terminalInput');
+      const cmd = input.value.trim();
+      if (!cmd) return;
+
+      input.value = '';
+      const output = document.getElementById('terminalOutput');
+      output.innerText += `\n$ ${cmd}\n`;
+
+      const res = await api('/api/terminal/exec', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd, cwd: currentWorkspace })
+      });
+
+      if (res) {
+        if (res.stdout) output.innerText += res.stdout;
+        if (res.stderr) output.innerText += res.stderr;
+      }
+      output.scrollTop = output.scrollHeight;
+    }
+
+    document.getElementById('terminalInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') execTerminalCommand();
+    });
+
+    document.getElementById('chatInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendAgentPrompt();
+      }
+    });
+
+    // Diagnostics
+    async function loadDiagnostics() {
+      const h = await api('/api/health');
+      const c = document.getElementById('diagContainer');
+      c.innerHTML = '';
+
+      const items = [
+        { title: 'Standalone Embedded Engine', ok: true, desc: 'Embedded HTTP & SSE daemon active on port 8765' },
+        { title: 'Antigravity CLI (agy)', ok: h.antigravity?.installed, desc: h.antigravity?.installed ? `Detected (${h.antigravity.version}) at ${h.antigravity.path}` : 'Embedded fallback runtime active' },
+        { title: 'POSIX Workspace', ok: true, desc: `Mounted at ${h.workspace || currentWorkspace}` },
+        { title: 'Google OAuth Authentication', ok: h.auth?.authenticated, desc: h.auth?.authenticated ? 'OAuth token valid and loaded' : 'Login file pending at ' + (h.auth?.token_file || '~/.gemini/antigravity-cli/') },
+        { title: 'External Termux', ok: h.termux, desc: h.termux ? 'Termux environment available as secondary fallback' : 'Not installed (not required)' }
+      ];
+
+      items.forEach(it => {
+        const card = document.createElement('div');
+        card.className = 'diag-card';
+        card.innerHTML = `
+          <div class="diag-card-header">
+            <span class="diag-card-title">${it.title}</span>
+            <span class="diag-status-badge ${it.ok ? 'diag-ok' : 'diag-fail'}">${it.ok ? '✓ READY' : '○ PENDING'}</span>
+          </div>
+          <div class="diag-desc">${it.desc}</div>
+        `;
+        c.appendChild(card);
+      });
+    }
+
+    // Model Selector
+    async function openModelModal() {
+      const res = await api('/api/models');
+      const list = document.getElementById('modelList');
+      list.innerHTML = '';
+
+      if (res && res.models) {
+        res.models.forEach(m => {
+          const opt = document.createElement('div');
+          opt.className = 'model-option' + (m.selected ? ' selected' : '');
+          opt.innerHTML = `<span>${escapeHtml(m.name)}</span> ${m.selected ? '<span>✓</span>' : ''}`;
+          opt.onclick = async () => {
+            await api('/api/model', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: m.id || m.name })
+            });
+            document.getElementById('txtActiveModel').innerText = m.name;
+            closeModelModal();
+          };
+          list.appendChild(opt);
+        });
+      }
+      document.getElementById('modelModal').classList.add('active');
+    }
+
+    function closeModelModal() {
+      document.getElementById('modelModal').classList.remove('active');
+    }
+
+    async function cycleEffort() {
+      const opts = ['low', 'medium', 'high'];
+      const curIdx = opts.indexOf(currentEffort);
+      const next = opts[(curIdx + 1) % opts.length];
+      await api('/api/effort', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ effort: next })
+      });
+      currentEffort = next;
+      document.getElementById('txtActiveEffort').innerText = 'Effort: ' + (next.charAt(0).toUpperCase() + next.slice(1));
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    // Initial check
+    checkHealth();
+    setInterval(checkHealth, 5000);
+    // Open README by default if available
+    openFileInEditor('README.md');
+  </script>
+</body>
+</html>

@@ -87,7 +87,7 @@ echo "=== 2. Compiling Kotlin and Java sources ==="
 kotlinc -jvm-target 17 \
     -cp "$ANDROID_JAR:$KOTLIN_LIB" \
     -d "$BUILD_DIR/classes" \
-    "$BUILD_DIR/gen/com/antigravity/clifrontend/R.java" \
+    "$BUILD_DIR/gen/com/antigravity/pocketgravity/R.java" \
     $(find "$APP_DIR/src/main/kotlin" -name "*.kt")
 
 echo "=== 3. Compiling bytecode with D8 ==="
@@ -97,8 +97,8 @@ echo "=== 3. Compiling bytecode with D8 ==="
    "$KOTLIN_LIB" \
    $(find "$BUILD_DIR/classes" -name "*.class")
 
-echo "=== 4. Packaging unaligned APK ==="
-"$AAPT_BIN" package -f -M "$APP_DIR/src/main/AndroidManifest.xml" -S "$APP_DIR/src/main/res" -I "$ANDROID_JAR" -F "$BUILD_DIR/unaligned.apk"
+echo "=== 4. Packaging unaligned APK with assets ==="
+"$AAPT_BIN" package -f -M "$APP_DIR/src/main/AndroidManifest.xml" -S "$APP_DIR/src/main/res" -A "$APP_DIR/src/main/assets" -0 gz -0 tar.gz -0 so -0 crt -0 tar -I "$ANDROID_JAR" -F "$BUILD_DIR/unaligned.apk"
 (cd "$BUILD_DIR/dex" && "$AAPT_BIN" add "$BUILD_DIR/unaligned.apk" classes.dex)
 
 echo "=== 5. Aligning APK with zipalign ==="

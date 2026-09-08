@@ -11,6 +11,9 @@ import json
 import time
 import signal
 import shutil
+import re
+import hashlib
+import base64
 import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
@@ -23,10 +26,12 @@ def resolve_agy_bin():
     env_agy = os.environ.get("AGY_BIN")
     if env_agy and os.path.exists(env_agy):
         return env_agy
-    which_agy = shutil.which("agy")
+    which_agy = shutil.which("agy") or shutil.which("agy.exe")
     if which_agy:
         return which_agy
     candidates = [
+        os.path.abspath("agy.exe"),
+        os.path.abspath("staging_x64/antigravity"),
         os.path.expanduser("~/.local/bin/agy"),
         "/root/.local/bin/agy",
         "/data/data/com.termux/files/home/.local/bin/agy",
@@ -37,7 +42,7 @@ def resolve_agy_bin():
     for c in candidates:
         if os.path.exists(c):
             return c
-    return env_agy or "/root/.local/bin/agy"
+    return env_agy or "agy"
 
 def resolve_default_workspace():
     env_ws = os.environ.get("DEFAULT_WORKSPACE")
@@ -79,6 +84,7 @@ TOKEN_FILE = resolve_token_file()
 
 current_workspace = os.path.abspath(DEFAULT_WORKSPACE)
 active_agent_process = None
+last_pkce_verifier = ""
 
 def get_agy_version():
     try:
@@ -135,10 +141,13 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     allow_reuse_address = True
 
 class BridgeHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
     def send_cors_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Connection", "close")
 
     def do_OPTIONS(self):
         self.send_response(200)
@@ -155,144 +164,164 @@ class BridgeHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
-        query = urllib.parse.parse_qs(parsed.query)
+        try:
+            parsed = urllib.parse.urlparse(self.path)
+            path = parsed.path
+            query = urllib.parse.parse_qs(parsed.query)
 
-        global current_workspace
+            global current_workspace
 
-        if path == "/" or path == "/api/health":
-            termux_detected = os.path.exists("/data/data/com.termux")
-            ubuntu_detected = os.path.exists("/etc/os-release")
-            agy_detected = os.path.exists(AGY_BIN)
-            auth_detected = os.path.exists(TOKEN_FILE) and os.path.getsize(TOKEN_FILE) > 0
-            settings = get_settings()
+            if path == "/" or path == "/index.html" or path == "/web":
+                web_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "index.html")
+                if os.path.exists(web_file):
+                    with open(web_file, "rb") as f:
+                        content = f.read()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(content)))
+                    self.send_cors_headers()
+                    self.end_headers()
+                    self.wfile.write(content)
+                    return
 
-            self.send_json({
-                "status": "ok",
-                "termux": termux_detected,
-                "ubuntu": ubuntu_detected,
-                "antigravity": {
-                    "installed": agy_detected,
-                    "version": get_agy_version() if agy_detected else None,
-                    "path": AGY_BIN,
-                },
-                "auth": {
-                    "authenticated": auth_detected,
-                    "token_file": TOKEN_FILE
-                },
-                "workspace": current_workspace,
-                "model": settings.get("model", "Gemini 3.8 Flash (Medium)"),
-                "effort": settings.get("effort", "medium"),
-                "timestamp": time.time()
-            })
+            if path == "/api/health":
+                termux_detected = os.path.exists("/data/data/com.termux")
+                ubuntu_detected = os.path.exists("/etc/os-release")
+                agy_detected = os.path.exists(AGY_BIN)
+                tf = resolve_token_file()
+                auth_detected = os.path.exists(tf) and os.path.getsize(tf) > 0
+                settings = get_settings()
 
-        elif path == "/api/models":
-            models = get_models()
-            settings = get_settings()
-            current_model = settings.get("model", "")
-            for m in models:
-                m["selected"] = (m["id"] == current_model or m["name"] == current_model)
-            self.send_json({"models": models, "current": current_model})
-
-        elif path == "/api/effort":
-            settings = get_settings()
-            self.send_json({
-                "current": settings.get("effort", "medium"),
-                "options": ["low", "medium", "high"]
-            })
-
-        elif path == "/api/auth/status":
-            auth_detected = os.path.exists(TOKEN_FILE) and os.path.getsize(TOKEN_FILE) > 0
-            self.send_json({"authenticated": auth_detected, "token_file": TOKEN_FILE})
-
-        elif path == "/api/workspace":
-            self.send_json({"workspace": current_workspace})
-
-        elif path == "/api/fs/tree":
-            target = query.get("path", [current_workspace])[0]
-            target = os.path.abspath(target)
-            include_hidden = query.get("include_hidden", ["false"])[0].lower() == "true"
-
-            if not os.path.exists(target):
-                self.send_json({"error": "Path not found", "path": target}, 404)
-                return
-
-            items = []
-            try:
-                for entry in sorted(os.scandir(target), key=lambda e: (not e.is_dir(), e.name.lower())):
-                    if not include_hidden and entry.name.startswith("."):
-                        continue
-                    try:
-                        stat = entry.stat()
-                        items.append({
-                            "name": entry.name,
-                            "path": entry.path,
-                            "is_dir": entry.is_dir(),
-                            "size": stat.st_size if not entry.is_dir() else 0,
-                            "modified": stat.st_mtime
-                        })
-                    except Exception:
-                        pass
-                self.send_json({"path": target, "items": items})
-            except Exception as e:
-                self.send_json({"error": str(e)}, 500)
-
-        elif path == "/api/fs/file":
-            target = query.get("path", [""])[0]
-            target = os.path.abspath(target)
-            if not os.path.exists(target) or os.path.isdir(target):
-                self.send_json({"error": "File not found", "path": target}, 404)
-                return
-            try:
-                with open(target, "r", encoding="utf-8", errors="replace") as f:
-                    content = f.read()
                 self.send_json({
-                    "path": target,
-                    "name": os.path.basename(target),
-                    "size": len(content),
-                    "content": content
+                    "status": "ok",
+                    "termux": termux_detected,
+                    "ubuntu": ubuntu_detected,
+                    "antigravity": {
+                        "installed": agy_detected,
+                        "version": get_agy_version() if agy_detected else None,
+                        "path": AGY_BIN,
+                    },
+                    "auth": {
+                        "authenticated": auth_detected,
+                        "token_file": tf
+                    },
+                    "workspace": current_workspace,
+                    "model": settings.get("model", "Gemini 3.8 Flash (Medium)"),
+                    "effort": settings.get("effort", "medium"),
+                    "timestamp": time.time()
                 })
-            except Exception as e:
-                self.send_json({"error": str(e)}, 500)
 
-        elif path == "/api/git/changes":
-            target = query.get("workspace", [current_workspace])[0]
-            try:
-                res = subprocess.run(["git", "status", "--porcelain"], cwd=target, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
-                files = []
-                for line in res.stdout.splitlines():
-                    if len(line) >= 4:
-                        status = line[:2].strip()
-                        filepath = line[3:].strip()
-                        files.append({"status": status, "path": filepath})
-                self.send_json({"is_git": True, "workspace": target, "changes": files})
-            except Exception as e:
-                self.send_json({"is_git": False, "workspace": target, "changes": [], "error": str(e)})
+            elif path == "/api/models":
+                models = get_models()
+                settings = get_settings()
+                current_model = settings.get("model", "")
+                for m in models:
+                    m["selected"] = (m["id"] == current_model or m["name"] == current_model)
+                self.send_json({"models": models, "current": current_model})
 
-        elif path == "/api/git/diff":
-            target = query.get("workspace", [current_workspace])[0]
-            filepath = query.get("path", [""])[0]
-            cmd = ["git", "diff", "HEAD"]
-            if filepath:
-                cmd.extend(["--", filepath])
-            try:
-                res = subprocess.run(cmd, cwd=target, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
-                self.send_json({"diff": res.stdout, "path": filepath})
-            except Exception as e:
-                self.send_json({"error": str(e)}, 500)
+            elif path == "/api/effort":
+                settings = get_settings()
+                self.send_json({
+                    "current": settings.get("effort", "medium"),
+                    "options": ["low", "medium", "high"]
+                })
 
-        elif path == "/api/sessions":
-            conv_dir = os.path.expanduser("~/.gemini/antigravity-cli/conversations")
-            sessions = []
-            if os.path.exists(conv_dir):
-                for f in sorted(os.listdir(conv_dir), reverse=True):
-                    if f.endswith(".json"):
-                        sessions.append({"id": f[:-5], "file": f})
-            self.send_json({"sessions": sessions})
+            elif path == "/api/auth/status":
+                tf = resolve_token_file()
+                auth_detected = os.path.exists(tf) and os.path.getsize(tf) > 0
+                self.send_json({"authenticated": auth_detected, "token_file": tf})
 
-        else:
-            self.send_json({"error": "Endpoint not found"}, 404)
+            elif path == "/api/workspace":
+                self.send_json({"workspace": current_workspace})
+
+            elif path == "/api/fs/tree":
+                target = query.get("path", [current_workspace])[0]
+                target = os.path.abspath(target)
+                include_hidden = query.get("include_hidden", ["false"])[0].lower() == "true"
+
+                if not os.path.exists(target):
+                    self.send_json({"error": "Path not found", "path": target}, 404)
+                    return
+
+                items = []
+                try:
+                    for entry in sorted(os.scandir(target), key=lambda e: (not e.is_dir(), e.name.lower())):
+                        if not include_hidden and entry.name.startswith("."):
+                            continue
+                        try:
+                            stat = entry.stat()
+                            items.append({
+                                "name": entry.name,
+                                "path": entry.path,
+                                "is_dir": entry.is_dir(),
+                                "size": stat.st_size if not entry.is_dir() else 0,
+                                "modified": stat.st_mtime
+                            })
+                        except Exception:
+                            pass
+                    self.send_json({"path": target, "items": items})
+                except Exception as e:
+                    self.send_json({"error": str(e)}, 500)
+
+            elif path == "/api/fs/file":
+                target = query.get("path", [""])[0]
+                target = os.path.abspath(target)
+                if not os.path.exists(target) or os.path.isdir(target):
+                    self.send_json({"error": "File not found", "path": target}, 404)
+                    return
+                try:
+                    with open(target, "r", encoding="utf-8", errors="replace") as f:
+                        content = f.read()
+                    self.send_json({
+                        "path": target,
+                        "name": os.path.basename(target),
+                        "size": len(content),
+                        "content": content
+                    })
+                except Exception as e:
+                    self.send_json({"error": str(e)}, 500)
+
+            elif path == "/api/git/changes":
+                target = query.get("workspace", [current_workspace])[0]
+                try:
+                    res = subprocess.run(["git", "status", "--porcelain"], cwd=target, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
+                    files = []
+                    for line in res.stdout.splitlines():
+                        if len(line) >= 4:
+                            status = line[:2].strip()
+                            filepath = line[3:].strip()
+                            files.append({"status": status, "path": filepath})
+                    self.send_json({"is_git": True, "workspace": target, "changes": files})
+                except Exception as e:
+                    self.send_json({"is_git": False, "workspace": target, "changes": [], "error": str(e)})
+
+            elif path == "/api/git/diff":
+                target = query.get("workspace", [current_workspace])[0]
+                filepath = query.get("path", [""])[0]
+                cmd = ["git", "diff", "HEAD"]
+                if filepath:
+                    cmd.extend(["--", filepath])
+                try:
+                    res = subprocess.run(cmd, cwd=target, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
+                    self.send_json({"diff": res.stdout, "path": filepath})
+                except Exception as e:
+                    self.send_json({"error": str(e)}, 500)
+
+            elif path == "/api/sessions":
+                conv_dir = os.path.expanduser("~/.gemini/antigravity-cli/conversations")
+                sessions = []
+                if os.path.exists(conv_dir):
+                    for f in sorted(os.listdir(conv_dir), reverse=True):
+                        if f.endswith(".json"):
+                            sessions.append({"id": f[:-5], "file": f})
+                self.send_json({"sessions": sessions})
+
+            else:
+                self.send_json({"error": "Endpoint not found"}, 404)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.send_json({"error": str(e)}, 500)
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -304,7 +333,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
         except Exception:
             payload = {}
 
-        global current_workspace, active_agent_process
+        global current_workspace, active_agent_process, last_pkce_verifier
 
         if path == "/api/workspace":
             new_ws = payload.get("workspace", "")
@@ -402,6 +431,117 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 self.send_json({"error": "Command timed out after 30 seconds"}, 504)
             except Exception as e:
                 self.send_json({"error": str(e)}, 500)
+
+        elif path == "/api/auth/logout":
+            try:
+                if os.path.exists(TOKEN_FILE):
+                    os.remove(TOKEN_FILE)
+                creds_file = os.path.join(os.path.dirname(TOKEN_FILE), "oauth_credentials.json")
+                if os.path.exists(creds_file):
+                    os.remove(creds_file)
+                self.send_json({"status": "ok", "authenticated": False})
+            except Exception as e:
+                self.send_json({"error": str(e)}, 500)
+
+        elif path == "/api/auth/token":
+            token = payload.get("token", "").strip()
+            if not token:
+                self.send_json({"error": "Empty token"}, 400)
+                return
+            
+            try:
+                if token.startswith("4/") or (len(token) > 40 and not token.startswith("AIza") and not token.startswith("ya29")):
+                    # OAuth Authorization Code - exchange for tokens with Google
+                    data = urllib.parse.urlencode({
+                        "code": token,
+                        "client_id": "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
+                        "client_secret": "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",
+                        "code_verifier": last_pkce_verifier,
+                        "redirect_uri": "https://antigravity.google/oauth-callback",
+                        "grant_type": "authorization_code"
+                    }).encode("utf-8")
+                    req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data, headers={"Content-Type": "application/x-www-form-urlencoded"})
+                    try:
+                        with urllib.request.urlopen(req) as response:
+                            resp_json = json.loads(response.read().decode("utf-8"))
+                            access_token = resp_json.get("access_token")
+                            expires_in = resp_json.get("expires_in", 3600)
+                            resp_json["expires_at"] = int(time.time() * 1000) + (expires_in - 300) * 1000
+                            creds_file = os.path.join(os.path.dirname(TOKEN_FILE), "oauth_credentials.json")
+                            os.makedirs(os.path.dirname(creds_file), exist_ok=True)
+                            with open(creds_file, "w", encoding="utf-8") as f:
+                                json.dump(resp_json, f, indent=2)
+                            if access_token:
+                                with open(TOKEN_FILE, "w", encoding="utf-8") as f:
+                                    f.write(access_token)
+                                self.send_json({"status": "ok", "authenticated": True})
+                                return
+                    except urllib.error.HTTPError as e:
+                        err_body = e.read().decode("utf-8")
+                        print(f"Token exchange HTTPError: {err_body}")
+                elif token.startswith("AIza"):
+                    settings = get_settings()
+                    settings["modelProvider"] = "gemini"
+                    save_settings(settings)
+                
+                os.makedirs(os.path.dirname(TOKEN_FILE), exist_ok=True)
+                with open(TOKEN_FILE, "w", encoding="utf-8") as f:
+                    f.write(token)
+                self.send_json({"status": "ok", "authenticated": True})
+            except Exception as e:
+                os.makedirs(os.path.dirname(TOKEN_FILE), exist_ok=True)
+                with open(TOKEN_FILE, "w", encoding="utf-8") as f:
+                    f.write(token)
+                self.send_json({"status": "ok", "authenticated": True})
+
+        elif path == "/api/auth/login":
+            # Triggers real agy auth login and captures OAuth URL emitted by CLI
+            if os.path.exists(AGY_BIN) or shutil.which(AGY_BIN):
+                try:
+                    proc = subprocess.Popen(
+                        [AGY_BIN, "auth", "login"],
+                        cwd=current_workspace,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        bufsize=1
+                    )
+                    oauth_url = None
+                    start_t = time.time()
+                    while time.time() - start_t < 6:
+                        line = proc.stdout.readline()
+                        if not line:
+                            break
+                        match = re.search(r"https://accounts\.google\.com/[^\s]+", line)
+                        if match:
+                            oauth_url = match.group(0)
+                            break
+                    if oauth_url:
+                        self.send_json({"status": "ok", "url": oauth_url, "source": "agy_cli"})
+                        return
+                except Exception as e:
+                    pass
+            random_bytes = os.urandom(32)
+            last_pkce_verifier = base64.urlsafe_b64encode(random_bytes).decode('utf-8').rstrip('=')
+            challenge = base64.urlsafe_b64encode(hashlib.sha256(last_pkce_verifier.encode('utf-8')).digest()).decode('utf-8').rstrip('=')
+            
+            client_id = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+            redirect_uri = "https://antigravity.google/oauth-callback"
+            scope = "https://www.googleapis.com/auth/generative-language https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs https://www.googleapis.com/auth/aicode openid"
+            auth_url = (
+                "https://accounts.google.com/o/oauth2/v2/auth?"
+                + urllib.parse.urlencode({
+                    "client_id": client_id,
+                    "redirect_uri": redirect_uri,
+                    "response_type": "code",
+                    "scope": scope,
+                    "code_challenge": challenge,
+                    "code_challenge_method": "S256",
+                    "access_type": "offline",
+                    "prompt": "consent"
+                })
+            )
+            self.send_json({"status": "ok", "url": auth_url, "source": "standalone_oauth"})
 
         elif path == "/api/agent/stop":
             if active_agent_process and active_agent_process.poll() is None:

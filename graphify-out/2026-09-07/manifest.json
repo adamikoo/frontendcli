@@ -1,0 +1,314 @@
+{
+  "bridge/server.py": {
+    "mtime": 1788786531.1782842,
+    "seen": 1788786933.5077481,
+    "ast_hash": "07dc8d22cc71e5fb35fa17f6d4ca8615",
+    "semantic_hash": ""
+  },
+  "bridge/start.ps1": {
+    "mtime": 1788784132.887285,
+    "seen": 1788786933.5077505,
+    "ast_hash": "19d7694c38a80cb4893d062c95e8919f",
+    "semantic_hash": "19d7694c38a80cb4893d062c95e8919f"
+  },
+  "bridge/start.sh": {
+    "mtime": 1788784132.888793,
+    "seen": 1788786933.507752,
+    "ast_hash": "0ce12ad514ce58c8007e65f522e0be7f",
+    "semantic_hash": "0ce12ad514ce58c8007e65f522e0be7f"
+  },
+  "bridge/status.sh": {
+    "mtime": 1788784132.8903036,
+    "seen": 1788786933.5077534,
+    "ast_hash": "fae6873b7d0ff205c332cef13dc50d12",
+    "semantic_hash": "fae6873b7d0ff205c332cef13dc50d12"
+  },
+  "bridge/stop.sh": {
+    "mtime": 1788784132.8912992,
+    "seen": 1788786933.507755,
+    "ast_hash": "88104aef2a5ee5a034561002c0a97522",
+    "semantic_hash": "88104aef2a5ee5a034561002c0a97522"
+  },
+  "scripts/build.sh": {
+    "mtime": 1788785709.8661764,
+    "seen": 1788786933.5077586,
+    "ast_hash": "9470d127e0c71afa272fc7a6747e8b33",
+    "semantic_hash": "9470d127e0c71afa272fc7a6747e8b33"
+  },
+  "app/build.gradle": {
+    "mtime": 1788785686.3058653,
+    "seen": 1788786933.5077186,
+    "ast_hash": "0452cdd8e1f78842429421c7d9117eba",
+    "semantic_hash": "0452cdd8e1f78842429421c7d9117eba"
+  },
+  "build.gradle": {
+    "mtime": 1788784743.5126383,
+    "seen": 1788786933.5077567,
+    "ast_hash": "ec9b7ad5255d6b9dbec7312df18843b8",
+    "semantic_hash": "ec9b7ad5255d6b9dbec7312df18843b8"
+  },
+  "scripts/live-reload.ps1": {
+    "mtime": 1788785731.827609,
+    "seen": 1788786933.50776,
+    "ast_hash": "b2fab0e7754e8972d3ec3bb4c5a0f5e5",
+    "semantic_hash": "b2fab0e7754e8972d3ec3bb4c5a0f5e5"
+  },
+  "settings.gradle": {
+    "mtime": 1788785517.2030995,
+    "seen": 1788786933.5077617,
+    "ast_hash": "0bb17ab199e7609d06046ac8af8f76a3",
+    "semantic_hash": "0bb17ab199e7609d06046ac8af8f76a3"
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/MainActivity.kt": {
+    "mtime": 1788786010.828387,
+    "seen": 1788786933.5077243,
+    "ast_hash": "6d91dd0363330d687796b30a58b2f2a4",
+    "semantic_hash": ""
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/api/BridgeClient.kt": {
+    "mtime": 1788786880.5463054,
+    "seen": 1788786933.507727,
+    "ast_hash": "6efbf995ef549600d70e16379ceb9671",
+    "semantic_hash": ""
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/api/BridgeServer.kt": {
+    "mtime": 1788786921.7381644,
+    "seen": 1788786933.5077283,
+    "ast_hash": "9b1a2e516df045d5a5d2e9b82bd5010e",
+    "semantic_hash": ""
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/api/BridgeService.kt": {
+    "mtime": 1788785697.617296,
+    "seen": 1788786933.5077298,
+    "ast_hash": "b85c2b77433b3a975ed67ded2b63f079",
+    "semantic_hash": "b85c2b77433b3a975ed67ded2b63f079"
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/api/Models.kt": {
+    "mtime": 1788785697.6177955,
+    "seen": 1788786933.5077324,
+    "ast_hash": "0e93fdf2a1cbd262b2ddfbe6139e5913",
+    "semantic_hash": "0e93fdf2a1cbd262b2ddfbe6139e5913"
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/api/RuntimeManager.kt": {
+    "mtime": 1788785697.6196551,
+    "seen": 1788786933.507734,
+    "ast_hash": "b351a4c40a798c98bc9d276051e3399d",
+    "semantic_hash": "b351a4c40a798c98bc9d276051e3399d"
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/ui/AgentPanel.kt": {
+    "mtime": 1788785993.5763893,
+    "seen": 1788786933.5077355,
+    "ast_hash": "70ce60f57e8113492e3aa5602afd0c4a",
+    "semantic_hash": ""
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/ui/ChangesPanel.kt": {
+    "mtime": 1788785697.6226888,
+    "seen": 1788786933.507737,
+    "ast_hash": "3a6f1f94fb699319b8b3b60ec2fd94aa",
+    "semantic_hash": "3a6f1f94fb699319b8b3b60ec2fd94aa"
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/ui/Components.kt": {
+    "mtime": 1788785697.6236877,
+    "seen": 1788786933.507738,
+    "ast_hash": "2cb839c09b197e8e18b801824f2deae4",
+    "semantic_hash": "2cb839c09b197e8e18b801824f2deae4"
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/ui/DiagnosticsPanel.kt": {
+    "mtime": 1788786897.3302402,
+    "seen": 1788786933.50774,
+    "ast_hash": "1f500833b328317d36cedaa2785075de",
+    "semantic_hash": ""
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/ui/EditorPanel.kt": {
+    "mtime": 1788785697.6256897,
+    "seen": 1788786933.5077415,
+    "ast_hash": "fad8474ad363966ddb4b49ba7e57343e",
+    "semantic_hash": "fad8474ad363966ddb4b49ba7e57343e"
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/ui/ExplorerPanel.kt": {
+    "mtime": 1788785697.6272056,
+    "seen": 1788786933.507743,
+    "ast_hash": "0b2d4314cce67e1bcbbfd4dba3659501",
+    "semantic_hash": "0b2d4314cce67e1bcbbfd4dba3659501"
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/ui/SettingsPanel.kt": {
+    "mtime": 1788786209.5206473,
+    "seen": 1788786933.5077448,
+    "ast_hash": "4b234a5080914ad1dc917a4f3eca8007",
+    "semantic_hash": ""
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/ui/TerminalPanel.kt": {
+    "mtime": 1788785697.629721,
+    "seen": 1788786933.5077462,
+    "ast_hash": "ab2d5247c8c9c6955c9099202a31fa27",
+    "semantic_hash": "ab2d5247c8c9c6955c9099202a31fa27"
+  },
+  ".github/workflows/build-apk.yml": {
+    "mtime": 1788784132.8261597,
+    "seen": 1788786933.5077636,
+    "ast_hash": "8b94c4fd7fc7ada044aa11c4b5000325",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1788784453.2870815,
+    "seen": 1788786933.5077653,
+    "ast_hash": "d8a7da62def58fc75ee264c19d6be91f",
+    "semantic_hash": ""
+  },
+  "bridge/web/index.html": {
+    "mtime": 1788784531.5853457,
+    "seen": 1788786933.5077672,
+    "ast_hash": "623671a4fe2abe0552cd74d1d49582be",
+    "semantic_hash": ""
+  },
+  "docs/ANTIGRAVITY_INTERFACE.md": {
+    "mtime": 1788784132.9018586,
+    "seen": 1788786933.5077689,
+    "ast_hash": "dcc1ab6cdad0be69604c4d87097473f6",
+    "semantic_hash": ""
+  },
+  "docs/ARCHITECTURE.md": {
+    "mtime": 1788784459.7035203,
+    "seen": 1788786933.5077703,
+    "ast_hash": "6535c21f903caab376c76ce3246d2564",
+    "semantic_hash": ""
+  },
+  "docs/BUILD.md": {
+    "mtime": 1788784132.9036949,
+    "seen": 1788786933.507772,
+    "ast_hash": "eb0a14fa9999326cd1a9342469894566",
+    "semantic_hash": ""
+  },
+  "docs/TERMUX_BRIDGE.md": {
+    "mtime": 1788784132.9047008,
+    "seen": 1788786933.507773,
+    "ast_hash": "bf3e8fbb56c24461b98d69daa88b791e",
+    "semantic_hash": ""
+  },
+  "docs/TROUBLESHOOTING.md": {
+    "mtime": 1788784132.906214,
+    "seen": 1788786933.507774,
+    "ast_hash": "a1a3dba5a09f6a6d2735b20b92e883f2",
+    "semantic_hash": ""
+  },
+  "Pocketgravitylogo.png": {
+    "mtime": 1788785021.417086,
+    "seen": 1788786933.5077753,
+    "ast_hash": "5674a41a5b5e21e06dd096bd0f7f11e8",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/drawable/ic_launcher.png": {
+    "mtime": 1788786156.7916458,
+    "seen": 1788786933.5077765,
+    "ast_hash": "0869d0bb753a20ab6576b8a0cc2bbf67",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/drawable/ic_launcher_round.png": {
+    "mtime": 1788786156.7956798,
+    "seen": 1788786933.5077777,
+    "ast_hash": "0869d0bb753a20ab6576b8a0cc2bbf67",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-hdpi/ic_launcher.png": {
+    "mtime": 1788786156.5400276,
+    "seen": 1788786933.5077791,
+    "ast_hash": "b4e76eb6a079ae0958db4b7b794fe6b3",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-hdpi/ic_launcher_round.png": {
+    "mtime": 1788786156.541028,
+    "seen": 1788786933.5077817,
+    "ast_hash": "b4e76eb6a079ae0958db4b7b794fe6b3",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-mdpi/ic_launcher.png": {
+    "mtime": 1788786156.485134,
+    "seen": 1788786933.507783,
+    "ast_hash": "86c36345a1b2fe0888933f1d4885b36b",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-mdpi/ic_launcher_round.png": {
+    "mtime": 1788786156.485633,
+    "seen": 1788786933.5077856,
+    "ast_hash": "86c36345a1b2fe0888933f1d4885b36b",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-xhdpi/ic_launcher.png": {
+    "mtime": 1788786156.6011329,
+    "seen": 1788786933.5077868,
+    "ast_hash": "99f362979bf8018b2cd23bbd5c63f4c8",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-xhdpi/ic_launcher_round.png": {
+    "mtime": 1788786156.6031494,
+    "seen": 1788786933.5077896,
+    "ast_hash": "99f362979bf8018b2cd23bbd5c63f4c8",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-xxhdpi/ic_launcher.png": {
+    "mtime": 1788786156.658823,
+    "seen": 1788786933.5077906,
+    "ast_hash": "77dc44e6cb2c9c1bd7c5577b757f8bdf",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png": {
+    "mtime": 1788786156.6623545,
+    "seen": 1788786933.5077934,
+    "ast_hash": "77dc44e6cb2c9c1bd7c5577b757f8bdf",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-xxxhdpi/ic_launcher.png": {
+    "mtime": 1788786156.7280834,
+    "seen": 1788786933.5077944,
+    "ast_hash": "0869d0bb753a20ab6576b8a0cc2bbf67",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png": {
+    "mtime": 1788786156.7316213,
+    "seen": 1788786933.507797,
+    "ast_hash": "0869d0bb753a20ab6576b8a0cc2bbf67",
+    "semantic_hash": ""
+  },
+  "pocketgravity.png": {
+    "mtime": 1788785623.9969616,
+    "seen": 1788786933.5077982,
+    "ast_hash": "7ac91de89b3c06e09c7df19a7cce74f0",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-hdpi/ic_launcher_foreground.png": {
+    "mtime": 1788786156.9988546,
+    "seen": 1788786933.5077803,
+    "ast_hash": "668b9cdb6eeac1924fd4f48dc0eb6706",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-mdpi/ic_launcher_foreground.png": {
+    "mtime": 1788786156.8971906,
+    "seen": 1788786933.5077841,
+    "ast_hash": "489e32771efc3ef86ce9480cb32d23bd",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-xhdpi/ic_launcher_foreground.png": {
+    "mtime": 1788786157.0965614,
+    "seen": 1788786933.507788,
+    "ast_hash": "8f10f75464985fbe2d715f466a0f9718",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-xxhdpi/ic_launcher_foreground.png": {
+    "mtime": 1788786157.190524,
+    "seen": 1788786933.5077918,
+    "ast_hash": "c22d6e5f4deb8d37da6f22e6c69fc276",
+    "semantic_hash": ""
+  },
+  "app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png": {
+    "mtime": 1788786157.2975175,
+    "seen": 1788786933.5077958,
+    "ast_hash": "34507b2c06351ac8b928fd4a34bd80d9",
+    "semantic_hash": ""
+  },
+  "app/src/main/kotlin/com/antigravity/pocketgravity/api/DebugLogger.kt": {
+    "mtime": 1788786869.799591,
+    "seen": 1788786933.5077312,
+    "ast_hash": "bde394900176489fdf8eeb21b6796455",
+    "semantic_hash": ""
+  }
+}

@@ -1,9 +1,9 @@
 # CLIFrontend Architecture
-
+ 
 ## 1. System Overview
-
-CLIFrontend is a native Android mobile IDE and frontend for the Google Antigravity CLI (`agy`) running inside an aarch64 PRoot Ubuntu container under Termux on Android.
-
+ 
+CLIFrontend is a standalone native Android mobile IDE and frontend for the Google Antigravity CLI (`agy`) running directly on Android (`aarch64`) with an embedded zero-dependency Kotlin daemon.
+ 
 ```
 +-------------------------------------------------------------+
 |                     Android Phone                           |
@@ -19,25 +19,21 @@ CLIFrontend is a native Android mobile IDE and frontend for the Google Antigravi
 |  |  * Model & Reasoning Selector (Live agy catalog)      |  |
 |  |  * Diagnostics & Setup Wizard                         |  |
 |  +---------------------------|---------------------------+  |
-|                              | Localhost IPC (HTTP/WS)      |
+|                              | Localhost IPC (HTTP/SSE)     |
 |                              v                              |
 |  +-------------------------------------------------------+  |
-|  |               Local Bridge Daemon (:8765)             |  |
-|  |  * REST Endpoints: /api/fs, /api/models, /api/auth    |  |
-|  |  * WS Endpoints: /ws/agent (NDJSON), /ws/terminal PTY |  |
+|  |             Embedded Kotlin Bridge Daemon (:8765)     |  |
+|  |  * Built-in Android Service (Zero Python overhead)    |  |
+|  |  * REST: /api/fs, /api/models, /api/auth, /api/git    |  |
+|  |  * SSE: /api/agent/stream (NDJSON streaming)          |  |
 |  +---------------------------|---------------------------+  |
-|                              | Subprocess / IPC             |
+|                              | Subprocess / JNI             |
 |                              v                              |
 |  +-------------------------------------------------------+  |
-|  |                    Ubuntu PRoot                       |  |
-|  |  * Shell Environment (bash)                           |  |
-|  |  * Git & Workspace directories                        |  |
-|  +---------------------------|---------------------------+  |
-|                              | Exec                         |
-|                              v                              |
-|  +-------------------------------------------------------+  |
-|  |               Antigravity CLI (agy 1.1.27)            |  |
-|  |  * Real AI Agent, Model router, Tool orchestrator     |  |
+|  |           Micro Runtime Engine (< 20 MB)              |  |
+|  |  * Shell Environment (Busybox POSIX)                  |  |
+|  |  * Embedded PRoot / glibc loader                      |  |
+|  |  * Antigravity CLI (agy 1.1.27)                       |  |
 |  +-------------------------------------------------------+  |
 +-------------------------------------------------------------+
 ```

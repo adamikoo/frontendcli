@@ -1,0 +1,406 @@
+{
+  "communities": {
+    "0": [
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_getsettings",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handleagentstop",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handleagentstream",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handleauthstatus",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handleclient",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handlefscreate",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handlefsdelete",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handlefsfileget",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handlefsfilesave",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handlefsrename",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handlefstree",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handlegeteffort",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handlegetmodels",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handlegitchanges",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handlegitdiff",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handlehealth",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handlesessions",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handleseteffort",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handlesetmodel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handlesetworkspace",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_handleterminalexec",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_parsequeryparams",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_routerequest",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_savesettings",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_sendjson",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_sendresponse",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_start",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver_stop",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_kt_jsonobject",
+      "bytearray",
+      "serversocket",
+      "socket"
+    ],
+    "1": [
+      "activity",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_kt_linearlayout",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_kt_textview",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_mainactivity",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_mainactivity_checkhealth",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_mainactivity_initpanels",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_mainactivity_initviews",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_mainactivity_oncreate",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_mainactivity_ondestroy",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_mainactivity_setuplisteners",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_mainactivity_showeffortpicker",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_mainactivity_showmodelpicker",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_mainactivity_showtermuxsetupdialog",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_mainactivity_switchtab",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_tab",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_tab_agent",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_tab_changes",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_tab_diagnostics",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_tab_editor",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_tab_explorer",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_tab_settings",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_tab_terminal",
+      "bridgeclient",
+      "bundle",
+      "changespanel",
+      "diagnosticspanel",
+      "editorpanel",
+      "explorerpanel",
+      "framelayout",
+      "settingspanel",
+      "terminalpanel"
+    ],
+    "2": [
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_createitem",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_deleteitem",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_execterminal",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_getfile",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_getfiles",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_getgitchanges",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_getgitdiff",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_gethealth",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_getmodels",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_renameitem",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_runonmain",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_savefile",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_seteffort",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_setmodel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_stopagent",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient_streamagent",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_gitchange",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_healthresponse",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_healthresponse_fromjson",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_kt_jsonobject",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_modelitem",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_terminalexecresponse",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_changespanel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_changespanel_changespanel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_changespanel_changespanel_loadchanges",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_changespanel_changespanel_loaddiff",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_changespanel_changespanel_renderchanges",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_changespanel_kt_linearlayout",
+      "t"
+    ],
+    "3": [
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeservice",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeservice_bridgeservice",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeservice_bridgeservice_createnotification",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeservice_bridgeservice_createnotificationchannel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeservice_bridgeservice_onbind",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeservice_bridgeservice_oncreate",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeservice_bridgeservice_ondestroy",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeservice_bridgeservice_onstartcommand",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeservice_bridgeservice_start",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeservice_bridgeservice_stop",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeservice_kt_context",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_diagnosticspanel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_diagnosticspanel_diagnosticspanel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_diagnosticspanel_diagnosticspanel_addtiercard",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_diagnosticspanel_diagnosticspanel_rundiagnostics",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_diagnosticspanel_diagnosticspanel_sp",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_diagnosticspanel_kt_linearlayout",
+      "build",
+      "ibinder",
+      "intent",
+      "notification",
+      "powermanager",
+      "service"
+    ],
+    "4": [
+      "basehttprequesthandler",
+      "bridge_server",
+      "bridge_server_bridgehandler",
+      "bridge_server_bridgehandler_do_get",
+      "bridge_server_bridgehandler_do_options",
+      "bridge_server_bridgehandler_do_post",
+      "bridge_server_bridgehandler_send_cors_headers",
+      "bridge_server_bridgehandler_send_json",
+      "bridge_server_cleanup_pid",
+      "bridge_server_get_agy_version",
+      "bridge_server_get_models",
+      "bridge_server_get_settings",
+      "bridge_server_rationale_2",
+      "bridge_server_resolve_agy_bin",
+      "bridge_server_resolve_default_workspace",
+      "bridge_server_resolve_token_file",
+      "bridge_server_run",
+      "bridge_server_save_settings",
+      "bridge_server_threadedhttpserver",
+      "httpserver",
+      "threadingmixin"
+    ],
+    "5": [
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_components",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_components_ansicolorparser",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_components_ansicolorparser_parse",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_components_diffcolorizer",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_components_diffcolorizer_colorize",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_explorerpanel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_settingspanel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_settingspanel_kt_linearlayout",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_settingspanel_settingspanel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_settingspanel_settingspanel_addsectionheader",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_settingspanel_settingspanel_addsettingrow",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_settingspanel_settingspanel_buildsettingsui",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_terminalpanel",
+      "context",
+      "jsonobject",
+      "textview",
+      "view"
+    ],
+    "6": [
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_aftertextchanged",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_beforetextchanged",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_editorpanel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_editorpanel_closetab",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_editorpanel_initaccessorykeys",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_editorpanel_openfile",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_editorpanel_opentab",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_editorpanel_savecurrenttab",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_editorpanel_switchtab",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_editorpanel_updatelinenumbers",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_editorpanel_updatetabsui",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_kt_linearlayout",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_ontextchanged",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_opentab",
+      "editable"
+    ],
+    "7": [
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel_agentpanel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel_agentpanel_addusermessage",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel_agentpanel_createshortcutrow",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel_agentpanel_resettoemptychat",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel_agentpanel_scrolltobottom",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel_agentpanel_sendprompt",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel_agentpanel_showmodelpicker",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel_agentpanel_showmodepicker",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel_agentpanel_showsessionhistory",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel_agentpanel_showwelcomestate",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel_agentpanel_startagentresponse",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel_kt_linearlayout",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel_kt_textview",
+      "imageview"
+    ],
+    "8": [
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_runtimemanager",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_runtimemanager_kt_context",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_runtimemanager_runtimemanager",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_runtimemanager_runtimemanager_buildprocess",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_runtimemanager_runtimemanager_ensuredirectories",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_runtimemanager_runtimemanager_extractassetifpresent",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_runtimemanager_runtimemanager_findagybinary",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_runtimemanager_runtimemanager_findprootbinary",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_runtimemanager_runtimemanager_findshellbinary",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_runtimemanager_runtimemanager_getagyversion",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_runtimemanager_runtimemanager_init",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_runtimemanager_runtimemanager_isstandaloneruntimeready"
+    ],
+    "9": [
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_fileitem",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_explorerpanel_explorerpanel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_explorerpanel_explorerpanel_formatsize",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_explorerpanel_explorerpanel_loadfiles",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_explorerpanel_explorerpanel_navigateto",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_explorerpanel_explorerpanel_promptcreateitem",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_explorerpanel_explorerpanel_promptdelete",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_explorerpanel_explorerpanel_promptrename",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_explorerpanel_explorerpanel_renderitems",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_explorerpanel_explorerpanel_showitemcontextmenu",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_explorerpanel_kt_linearlayout"
+    ],
+    "10": [
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_chatmessage",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_messagestatus",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_messagestatus_active",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_messagestatus_done",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_messagestatus_error",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_role",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_role_agent",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_role_system",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_role_tool",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_api_models_role_user"
+    ],
+    "11": [
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_terminalpanel_kt_linearlayout",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_terminalpanel_terminalpanel",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_terminalpanel_terminalpanel_appendansioutput",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_terminalpanel_terminalpanel_appenderroroutput",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_terminalpanel_terminalpanel_appendoutput",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_terminalpanel_terminalpanel_executecommand",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_terminalpanel_terminalpanel_initquickactions",
+      "app_src_main_kotlin_com_antigravity_pocketgravity_ui_terminalpanel_terminalpanel_scrolltobottom"
+    ],
+    "12": [
+      "bridge_start_check_health",
+      "bridge_start_find_python",
+      "bridge_start_find_server_script",
+      "bridge_start_is_running",
+      "bridge_start_kill_port_process",
+      "bridge_start_port",
+      "bridge_start_sh__entry",
+      "bridge_start_sh_bridge_start"
+    ],
+    "13": [
+      "scripts_build",
+      "scripts_build_find_bin",
+      "scripts_build_sh__entry"
+    ],
+    "14": [
+      "bridge_start_ps1_bridge_start",
+      "bridge_start_stop_bridgeprocess"
+    ],
+    "15": [
+      "bridge_status",
+      "bridge_status_sh__entry"
+    ],
+    "16": [
+      "bridge_stop",
+      "bridge_stop_sh__entry"
+    ],
+    "17": [
+      "scripts_live_reload",
+      "scripts_live_reload_deploy_app"
+    ],
+    "18": [
+      "app_build"
+    ],
+    "19": [
+      "app_src_main_kotlin_com_antigravity_clifrontend_api_bridgeservice_kt_context"
+    ],
+    "20": [
+      "app_src_main_kotlin_com_antigravity_clifrontend_mainactivity_kt_textview"
+    ],
+    "21": [
+      "settings"
+    ]
+  },
+  "cohesion": {
+    "0": 0.20499108734402852,
+    "1": 0.11088709677419355,
+    "2": 0.11397849462365592,
+    "3": 0.15810276679841898,
+    "4": 0.15714285714285714,
+    "5": 0.14035087719298245,
+    "6": 0.24166666666666667,
+    "7": 0.3076923076923077,
+    "8": 0.2878787878787879,
+    "9": 0.43636363636363634,
+    "10": 0.2,
+    "11": 0.5714285714285714,
+    "12": 0.42857142857142855,
+    "13": 1.0,
+    "14": 1.0,
+    "15": 1.0,
+    "16": 1.0,
+    "17": 1.0,
+    "18": 1.0,
+    "19": 1.0,
+    "20": 1.0,
+    "21": 1.0
+  },
+  "gods": [
+    {
+      "id": "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeserver_bridgeserver",
+      "label": "BridgeServer",
+      "degree": 32
+    },
+    {
+      "id": "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_mainactivity",
+      "label": "MainActivity",
+      "degree": 26
+    },
+    {
+      "id": "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeclient_bridgeclient",
+      "label": "BridgeClient",
+      "degree": 23
+    },
+    {
+      "id": "app_src_main_kotlin_com_antigravity_pocketgravity_ui_agentpanel_agentpanel",
+      "label": "AgentPanel",
+      "degree": 15
+    },
+    {
+      "id": "app_src_main_kotlin_com_antigravity_pocketgravity_api_bridgeservice_bridgeservice",
+      "label": "BridgeService",
+      "degree": 12
+    },
+    {
+      "id": "app_src_main_kotlin_com_antigravity_pocketgravity_api_runtimemanager_runtimemanager",
+      "label": "RuntimeManager",
+      "degree": 11
+    },
+    {
+      "id": "app_src_main_kotlin_com_antigravity_pocketgravity_ui_editorpanel_editorpanel",
+      "label": "EditorPanel",
+      "degree": 10
+    },
+    {
+      "id": "app_src_main_kotlin_com_antigravity_pocketgravity_ui_explorerpanel_explorerpanel",
+      "label": "ExplorerPanel",
+      "degree": 10
+    },
+    {
+      "id": "app_src_main_kotlin_com_antigravity_pocketgravity_mainactivity_tab",
+      "label": "Tab",
+      "degree": 9
+    },
+    {
+      "id": "app_src_main_kotlin_com_antigravity_pocketgravity_ui_terminalpanel_terminalpanel",
+      "label": "TerminalPanel",
+      "degree": 8
+    }
+  ],
+  "surprises": [
+    {
+      "source": "BridgeService",
+      "target": "BridgeServer",
+      "source_files": [
+        "app/src/main/kotlin/com/antigravity/pocketgravity/api/BridgeService.kt",
+        "app/src/main/kotlin/com/antigravity/pocketgravity/api/BridgeServer.kt"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "bridges separate communities"
+    },
+    {
+      "source": "MainActivity",
+      "target": "AgentPanel",
+      "source_files": [
+        "app/src/main/kotlin/com/antigravity/pocketgravity/MainActivity.kt",
+        "app/src/main/kotlin/com/antigravity/pocketgravity/ui/AgentPanel.kt"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "bridges separate communities"
+    }
+  ],
+  "tokens": {
+    "input": 0,
+    "output": 0
+  }
+}

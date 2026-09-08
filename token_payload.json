@@ -1,0 +1,9 @@
+{
+  "auth_method": "oauth",
+  "user_tier": "FREE",
+  "project_id": "default-cli-project",
+  "access_token": "ya29.a0AdMD6Eh--j8XxmY6X0Sc5drXCdRSxA-uZVvcpzmwb4w1sjbW8SFoZf1Vg3OAtbDeaU7-DGifEl5q3w3cdL_lFxH0CmR1hvMKs7Xg0mKxNWiUlUONtf9azr-z_m6ayQfRWyYQFoSo-H6JWuusSzsHfM7MROOblmbbHljxXoifBvkxxetfTkuWpmfnFCI99oNQE95FLEFiNSGaWwaCgYKAcASARQSFQHGX2Mi7df9T4IuL9Wq66CRaxpshw0213",
+  "refresh_token": "1//03DYc17A25Tg6CgYIARAAGAMSNwF-L9IrVJdpoOcnr-M3COXnErrnu47vSUJUpsKm6Kz_J-4LTMEJikyJA-o41VgFXMtdQ69dqJg",
+  "token_type": "Bearer",
+  "expiry_date": 1788811993151
+}

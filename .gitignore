@@ -11,6 +11,16 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Large binaries, crash dumps, and root archives
+*.apk
+*.exe
+*.hprof
+debian-*
+cli_linux_*
+scratch/
+staging_*/
+build/
+
 # IDE and OS
 .idea/
 *.iml
