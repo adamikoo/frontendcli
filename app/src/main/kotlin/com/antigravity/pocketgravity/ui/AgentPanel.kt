@@ -557,8 +557,9 @@ class AgentPanel(
                         onStatusChange(context.getString(R.string.status_error))
                         if (fullTextBuilder.isEmpty()) {
                             respTv.setTextColor(Color.parseColor("#EF4444"))
-                            respTv.text = "⚠️ Process exited with code $exitCode.\nCheck Diagnostics or logcat for details."
+                            respTv.text = "⚠️ Process exited with code $exitCode."
                         }
+                        addFailureActionCard(exitCode)
                     } else {
                         onStatusChange(context.getString(R.string.status_ready))
                         if (fullTextBuilder.isEmpty()) {
@@ -577,11 +578,99 @@ class AgentPanel(
                     onStatusChange(context.getString(R.string.status_error))
                     respTv.setTextColor(Color.parseColor("#EF4444"))
                     respTv.text = "Error: $err"
+                    addFailureActionCard(1, err)
                 } catch (e: Throwable) {
                     com.antigravity.pocketgravity.api.DebugLogger.e("Agent onError error", e)
                 }
             }
         )
+    }
+
+    private fun addFailureActionCard(exitCode: Int, customError: String? = null) {
+        val errCard = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.bg_rounded_card)
+            setPadding(24, 20, 24, 20)
+            val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = 16
+                bottomMargin = 16
+            }
+            layoutParams = lp
+        }
+
+        val errTitle = TextView(context).apply {
+            text = "⚠️ Antigravity Process Exited with Code $exitCode"
+            setTextColor(Color.parseColor("#F87171"))
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        errCard.addView(errTitle)
+
+        val snippet = customError ?: com.antigravity.pocketgravity.api.DebugLogger.lastStderr.ifEmpty { "Check console / Android Studio Logcat for full details." }
+        val errSnippetTv = TextView(context).apply {
+            text = snippet.take(400)
+            textSize = 11f
+            typeface = Typeface.MONOSPACE
+            setTextColor(Color.parseColor("#E2E8F0"))
+            setPadding(0, 8, 0, 14)
+        }
+        errCard.addView(errSnippetTv)
+
+        val btnBar = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        }
+
+        val btnCopy = Button(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = 6
+            }
+            text = "📋 Copy Debug Info"
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            setBackgroundResource(R.drawable.bg_chip)
+            setOnClickListener {
+                val report = com.antigravity.pocketgravity.api.DebugLogger.generateFullReport(context)
+                com.antigravity.pocketgravity.api.DebugLogger.copyToClipboard(context, report, "PocketGravity Failure Log")
+            }
+        }
+        btnBar.addView(btnCopy)
+
+        val btnDiag = Button(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = 6
+            }
+            text = "🔍 View Full Report"
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            setBackgroundResource(R.drawable.bg_chip)
+            setOnClickListener {
+                val report = com.antigravity.pocketgravity.api.DebugLogger.generateFullReport(context)
+                val reportView = TextView(context).apply {
+                    text = report
+                    textSize = 10f
+                    typeface = Typeface.MONOSPACE
+                    setPadding(20, 16, 20, 16)
+                    setTextColor(Color.parseColor("#E2E8F0"))
+                }
+                val scroll = ScrollView(context).apply { addView(reportView) }
+                AlertDialog.Builder(context)
+                    .setTitle("PocketGravity Diagnostic Report")
+                    .setView(scroll)
+                    .setPositiveButton("📋 Copy All") { _, _ ->
+                        com.antigravity.pocketgravity.api.DebugLogger.copyToClipboard(context, report, "PocketGravity Diagnostic Report")
+                    }
+                    .setNegativeButton("Close", null)
+                    .show()
+            }
+        }
+        btnBar.addView(btnDiag)
+
+        errCard.addView(btnBar)
+        messagesContainer.addView(errCard)
+        scrollToBottom()
     }
 
     fun setModelName(model: String) {

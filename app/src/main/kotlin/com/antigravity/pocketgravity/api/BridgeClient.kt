@@ -491,4 +491,56 @@ class BridgeClient(private val context: Context? = null) {
             }
         }
     }
+
+    fun testCli(arg: String = "--version", callback: (Result<JSONObject>) -> Unit) {
+        executor.execute {
+            try {
+                val url = URL("$baseUrl/api/debug/test-cli")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 20000
+                conn.readTimeout = 20000
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                val payload = JSONObject().put("arg", arg).toString()
+                OutputStreamWriter(conn.outputStream).use { it.write(payload) }
+
+                val code = conn.responseCode
+                val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                val body = if (stream != null) BufferedReader(InputStreamReader(stream, "UTF-8")).readText() else "{}"
+                val json = try { JSONObject(body) } catch (_: Exception) { JSONObject().put("raw", body) }
+
+                if (code == 200) {
+                    runOnMain(callback, Result.success(json))
+                } else {
+                    val err = json.optString("error", "HTTP $code")
+                    runOnMain(callback, Result.failure(Exception(err)))
+                }
+            } catch (e: Exception) {
+                runOnMain(callback, Result.failure(e))
+            }
+        }
+    }
+
+    fun getDebugReport(callback: (Result<String>) -> Unit) {
+        executor.execute {
+            try {
+                val url = URL("$baseUrl/api/debug/report")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+                if (conn.responseCode == 200) {
+                    val body = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8")).readText()
+                    val json = JSONObject(body)
+                    runOnMain(callback, Result.success(json.optString("report", "")))
+                } else {
+                    runOnMain(callback, Result.failure(Exception("HTTP ${conn.responseCode}")))
+                }
+            } catch (e: Exception) {
+                runOnMain(callback, Result.failure(e))
+            }
+        }
+    }
 }
+

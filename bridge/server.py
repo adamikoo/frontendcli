@@ -683,9 +683,14 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 stderr_thread.join(timeout=1.0)
                 exit_code = active_agent_process.returncode
 
-                if exit_code != 0 and not has_output:
+                if exit_code != 0:
                     err_msg = "".join(stderr_lines).strip() or f"Antigravity CLI exited with code {exit_code}"
-                    err_payload = json.dumps({"event": "error", "error": err_msg})
+                    err_payload = json.dumps({
+                        "event": "error",
+                        "error": f"Process exited with code {exit_code}:\n{err_msg}",
+                        "exit_code": exit_code,
+                        "stderr": err_msg
+                    })
                     self.wfile.write(f"data: {err_payload}\n\n".encode("utf-8"))
                     self.wfile.flush()
 

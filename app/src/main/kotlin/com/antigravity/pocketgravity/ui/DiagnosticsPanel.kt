@@ -35,6 +35,42 @@ class DiagnosticsPanel(
         setPadding(0, 0, 0, 16)
     }
 
+    private val topButtonBar = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = 14
+        }
+    }
+
+    private val btnCopyReport = Button(context).apply {
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginEnd = 6
+        }
+        text = "📋 Copy Full Report"
+        textSize = 11.5f
+        typeface = Typeface.DEFAULT_BOLD
+        setTextColor(Color.WHITE)
+        setBackgroundResource(R.drawable.bg_chip)
+        setOnClickListener {
+            val report = com.antigravity.pocketgravity.api.DebugLogger.generateFullReport(context)
+            com.antigravity.pocketgravity.api.DebugLogger.copyToClipboard(context, report, "PocketGravity Diagnostic Report")
+        }
+    }
+
+    private val btnTestCli = Button(context).apply {
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginStart = 6
+        }
+        text = "🧪 Test CLI (agy)"
+        textSize = 11.5f
+        typeface = Typeface.DEFAULT_BOLD
+        setTextColor(Color.WHITE)
+        setBackgroundResource(R.drawable.bg_chip)
+        setOnClickListener {
+            runCliSelfTest()
+        }
+    }
+
     private val cardsContainer = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -49,14 +85,18 @@ class DiagnosticsPanel(
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 88).apply {
             topMargin = 16
         }
-        text = "Run Full Diagnostics"
+        text = "🔄 Refresh Diagnostics"
         textSize = 12f
         setTextColor(Color.WHITE)
         setBackgroundResource(R.drawable.bg_chip)
     }
 
     init {
+        topButtonBar.addView(btnCopyReport)
+        topButtonBar.addView(btnTestCli)
+
         view.addView(titleTv)
+        view.addView(topButtonBar)
         view.addView(scrollView)
         view.addView(refreshButton)
 
@@ -65,6 +105,44 @@ class DiagnosticsPanel(
         }
 
         runDiagnostics()
+    }
+
+    private fun runCliSelfTest() {
+        Toast.makeText(context, "Executing 'agy --version' via PRoot...", Toast.LENGTH_SHORT).show()
+        bridgeClient.testCli("--version") { res ->
+            res.onSuccess { json ->
+                val cmd = json.optString("command", "agy --version")
+                val code = json.optInt("exit_code", -1)
+                val stdout = json.optString("stdout", "(empty)")
+                val stderr = json.optString("stderr", "(empty)")
+
+                val detailsText = "Command: $cmd\nExit Code: $code\n\n--- STDOUT ---\n$stdout\n\n--- STDERR ---\n$stderr"
+
+                val msgBox = TextView(context).apply {
+                    text = detailsText
+                    typeface = Typeface.MONOSPACE
+                    textSize = 11f
+                    setPadding(24, 20, 24, 20)
+                    setTextColor(if (code == 0) Color.parseColor("#4ADE80") else Color.parseColor("#F87171"))
+                }
+                val scroll = ScrollView(context).apply { addView(msgBox) }
+
+                AlertDialog.Builder(context)
+                    .setTitle(if (code == 0) "✓ CLI Execution Success" else "✕ CLI Execution Exited with Code $code")
+                    .setView(scroll)
+                    .setPositiveButton("📋 Copy Result") { _, _ ->
+                        com.antigravity.pocketgravity.api.DebugLogger.copyToClipboard(context, detailsText, "PocketGravity CLI Test Result")
+                    }
+                    .setNegativeButton("Close", null)
+                    .show()
+            }.onFailure { err ->
+                AlertDialog.Builder(context)
+                    .setTitle("CLI Test Failed to Run")
+                    .setMessage("Error contacting bridge daemon: ${err.message}\n\nPlease ensure the in-app engine is started.")
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+        }
     }
 
     fun runDiagnostics() {
@@ -358,6 +436,16 @@ class DiagnosticsPanel(
                     typeface = Typeface.DEFAULT_BOLD
                     setTextColor(Color.parseColor("#3B82F6"))
                 }
+                val btnCopyLogs = TextView(context).apply {
+                    text = "📋 Copy"
+                    textSize = 11f
+                    setTextColor(Color.parseColor("#38BDF8"))
+                    setPadding(10, 4, 10, 4)
+                    setOnClickListener {
+                        val text = com.antigravity.pocketgravity.api.DebugLogger.getAllText()
+                        com.antigravity.pocketgravity.api.DebugLogger.copyToClipboard(context, text, "PocketGravity Console Logs")
+                    }
+                }
                 val btnClear = TextView(context).apply {
                     text = "Clear"
                     textSize = 11f
@@ -369,6 +457,7 @@ class DiagnosticsPanel(
                     }
                 }
                 addView(titleView)
+                addView(btnCopyLogs)
                 addView(btnClear)
             }
             addView(header)

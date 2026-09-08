@@ -77,6 +77,13 @@ class MainActivity : Activity() {
         com.antigravity.pocketgravity.api.AssetExporter.exportBridgeFiles(this)
         com.antigravity.pocketgravity.api.BridgeService.start(this)
 
+        com.antigravity.pocketgravity.api.DebugLogger.logBanner("APPLICATION STARTED", mapOf(
+            "Logcat Filter" to "package:mine tag:PocketGravity",
+            "Device" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} (API ${android.os.Build.VERSION.SDK_INT})",
+            "ABIs" to android.os.Build.SUPPORTED_ABIS.joinToString(", "),
+            "Standalone Ready" to com.antigravity.pocketgravity.api.RuntimeManager.isStandaloneRuntimeReady()
+        ))
+
         bridgeClient = BridgeClient(this)
 
         initViews()

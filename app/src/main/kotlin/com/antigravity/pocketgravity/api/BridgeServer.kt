@@ -154,6 +154,8 @@ class BridgeServer(val port: Int = 8765) {
             method == "POST" && path == "/api/terminal/exec" -> handleTerminalExec(payload, output)
             method == "POST" && path == "/api/agent/stop" -> handleAgentStop(output)
             method == "POST" && path == "/api/agent/stream" -> handleAgentStream(payload, output, socket)
+            method == "POST" && path == "/api/debug/test-cli" -> handleDebugCliTest(payload, output)
+            method == "GET" && path == "/api/debug/report" -> handleDebugReport(output)
             else -> sendJson(output, JSONObject().put("error", "Endpoint not found"), 404)
         }
     }
@@ -502,11 +504,30 @@ class BridgeServer(val port: Int = 8765) {
             return
         }
 
+        DebugLogger.logBanner("AUTH TOKEN RECEIVED", mapOf(
+            "Input Length" to input.length,
+            "Starts with {" to input.startsWith("{"),
+            "Starts with 4/" to input.startsWith("4/"),
+            "Starts with ya29" to input.startsWith("ya29"),
+            "Starts with AIza" to input.startsWith("AIza")
+        ))
+
         try {
+            // Case 1: JSON payload pasted (e.g. gcloud ADC, oauth credentials json, etc.)
+            if (input.startsWith("{")) {
+                val json = JSONObject(input)
+                val isAdc = json.optString("type") == "authorized_user" || json.has("refresh_token")
+                val accessToken = json.optString("access_token", "")
+
+                persistOAuthCredentials(json, accessToken.ifEmpty { "manual-token" })
+                DebugLogger.i("JSON credentials successfully parsed and written to all credential locations!")
+                sendJson(output, JSONObject().put("status", "ok").put("authenticated", true).put("type", "json_credentials"))
+                return
+            }
+
+            // Case 2: Authorization code (starts with 4/ or standard Google code format)
             if (input.startsWith("4/") || (input.length > 40 && !input.startsWith("AIza") && !input.startsWith("ya29"))) {
-                // OAuth Authorization Code - exchange for tokens with Google
                 DebugLogger.i("Exchanging Google authorization code...")
-                var exchanged = false
                 val redirectUris = listOf(
                     "http://127.0.0.1:8765/oauth2callback",
                     "https://antigravity.google/oauth-callback"
@@ -539,14 +560,28 @@ class BridgeServer(val port: Int = 8765) {
                             sendJson(output, JSONObject().put("status", "ok").put("authenticated", true))
                             return
                         }
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        DebugLogger.e("Exchange attempt via $rUri failed", e)
+                    }
                 }
                 sendJson(output, JSONObject().put("error", "Failed to exchange authorization code with Google"), 400)
                 return
             }
 
+            // Case 3: Raw Access Token (ya29...) or other raw token string
+            val tokenJson = JSONObject().apply {
+                put("access_token", input)
+                put("token_type", "Bearer")
+                put("expires_in", 3600)
+                put("expiry_date", System.currentTimeMillis() + 3500 * 1000)
+            }
+            persistOAuthCredentials(tokenJson, input)
+
+            // Also write raw text to agyTokenFile as fallback
             RuntimeManager.agyTokenFile.parentFile?.mkdirs()
             RuntimeManager.agyTokenFile.writeText(input)
+
+            DebugLogger.i("Saved raw token to agyTokenFile (${RuntimeManager.agyTokenFile.absolutePath}) and credential stores")
             sendJson(output, JSONObject().put("status", "ok").put("authenticated", true))
         } catch (e: Exception) {
             DebugLogger.e("handleAuthToken error", e)
@@ -568,15 +603,17 @@ class BridgeServer(val port: Int = 8765) {
             val adcTargets = listOf(
                 File(RuntimeManager.homeDir, ".config/gcloud/application_default_credentials.json"),
                 File(RuntimeManager.agyConfigDir, "application_default_credentials.json"),
-                File(RuntimeManager.homeDir, ".gemini/application_default_credentials.json")
+                File(RuntimeManager.homeDir, ".gemini/application_default_credentials.json"),
+                File(RuntimeManager.rootfsDir, "root/.config/gcloud/application_default_credentials.json"),
+                File(RuntimeManager.rootfsDir, "root/.gemini/antigravity-cli/application_default_credentials.json")
             )
             for (at in adcTargets) {
                 try {
                     at.parentFile?.mkdirs()
                     at.writeText(adcObj.toString(2))
+                    DebugLogger.i("Wrote ADC credentials: ${at.absolutePath} (${at.length()} bytes)")
                 } catch (_: Exception) {}
             }
-            DebugLogger.i("Saved Google Cloud ADC credentials to ${adcTargets[0].absolutePath}")
         }
 
         // 2. Prepare StoredToken JSON struct for agy keyring storage
@@ -594,12 +631,14 @@ class BridgeServer(val port: Int = 8765) {
         val targets = listOf(
             RuntimeManager.agyTokenFile,
             File(RuntimeManager.agyConfigDir, "antigravity-oauth-token"),
-            File(RuntimeManager.homeDir, ".gemini/antigravity-cli/antigravity-oauth-token")
+            File(RuntimeManager.homeDir, ".gemini/antigravity-cli/antigravity-oauth-token"),
+            File(RuntimeManager.rootfsDir, "root/.gemini/antigravity-cli/antigravity-oauth-token")
         )
         for (t in targets) {
             try {
                 t.parentFile?.mkdirs()
                 t.writeText(storedTokenStr)
+                DebugLogger.i("Wrote storedToken to: ${t.absolutePath} (${t.length()} bytes)")
             } catch (_: Exception) {}
         }
 
@@ -607,13 +646,15 @@ class BridgeServer(val port: Int = 8765) {
             File(RuntimeManager.agyConfigDir, "oauth_credentials.json"),
             File(RuntimeManager.homeDir, ".gemini/oauth_creds.json"),
             File(RuntimeManager.homeDir, ".gemini/antigravity/mcp_oauth_tokens.json"),
-            File(RuntimeManager.homeDir, ".config/agy/credentials.json")
+            File(RuntimeManager.homeDir, ".config/agy/credentials.json"),
+            File(RuntimeManager.rootfsDir, "root/.gemini/oauth_creds.json")
         )
         val jsonStr = respJson.toString(2)
         for (ct in credsTargets) {
             try {
                 ct.parentFile?.mkdirs()
                 ct.writeText(jsonStr)
+                DebugLogger.i("Wrote oauth credentials to: ${ct.absolutePath} (${ct.length()} bytes)")
             } catch (_: Exception) {}
         }
 
@@ -921,9 +962,22 @@ class BridgeServer(val port: Int = 8765) {
         if (dangerouslySkip) { cmd.add("--dangerously-skip-permissions") }
 
         var processStarted = false
+        val capturedStdout = StringBuilder()
+        val capturedStderr = StringBuilder()
+
         try {
             val pb = RuntimeManager.buildProcess(cmd, File(currentWorkspace))
-            DebugLogger.i("Spawning agy process: ${pb.command().joinToString(" ")}")
+            val fullCmdStr = pb.command().joinToString(" ")
+            DebugLogger.logBanner("SPAWNING AGY CLI AGENT STREAM", mapOf(
+                "Command" to fullCmdStr,
+                "Workspace" to currentWorkspace,
+                "Model" to model.ifEmpty { "default" },
+                "Effort" to effort.ifEmpty { "default" },
+                "TokenFile Exists" to RuntimeManager.agyTokenFile.exists(),
+                "TokenFile Length" to (if (RuntimeManager.agyTokenFile.exists()) RuntimeManager.agyTokenFile.length() else 0),
+                "ADC Exists" to File(RuntimeManager.homeDir, ".config/gcloud/application_default_credentials.json").exists()
+            ))
+
             pb.redirectErrorStream(false)
             val process = pb.start()
             processStarted = true
@@ -941,13 +995,14 @@ class BridgeServer(val port: Int = 8765) {
                 } catch (_: Exception) {}
             }
 
-            // Forward stderr as SSE events AND to debug logger
+            // Forward stderr as SSE events AND to debug logger and Logcat
             executor.execute {
                 try {
                     var errLine: String?
                     while (errReader.readLine().also { errLine = it } != null) {
                         errLine?.let { line ->
                             if (line.isNotEmpty()) {
+                                capturedStderr.append(line).append("\n")
                                 DebugLogger.e("agy stderr: $line")
                                 try {
                                     val errData = JSONObject().apply {
@@ -971,6 +1026,7 @@ class BridgeServer(val port: Int = 8765) {
             while (reader.readLine().also { line = it } != null) {
                 val l = line?.trim() ?: continue
                 if (l.isNotEmpty()) {
+                    capturedStdout.append(l).append("\n")
                     DebugLogger.d("agy stdout: $l")
                     writeSse(l)
                 }
@@ -978,7 +1034,7 @@ class BridgeServer(val port: Int = 8765) {
 
             process.waitFor()
             var exitCode = process.exitValue()
-            DebugLogger.i("agy process exited with code $exitCode")
+            DebugLogger.recordProcessRun(cmd.joinToString(" "), exitCode, capturedStdout.toString(), capturedStderr.toString())
 
             if ((exitCode == 159 || exitCode == 139) && RuntimeManager.findProotBinary() != null && !RuntimeManager.requiresProot) {
                 DebugLogger.w("agy exited with code $exitCode (seccomp). Retrying with PRoot syscall emulation...")
@@ -994,7 +1050,12 @@ class BridgeServer(val port: Int = 8765) {
                         try {
                             var errL: String?
                             while (prootErrReader.readLine().also { errL = it } != null) {
-                                errL?.let { l -> if (l.isNotEmpty()) DebugLogger.e("proot agy stderr: $l") }
+                                errL?.let { l ->
+                                    if (l.isNotEmpty()) {
+                                        capturedStderr.append(l).append("\n")
+                                        DebugLogger.e("proot agy stderr: $l")
+                                    }
+                                }
                             }
                         } catch (_: Exception) {}
                     }
@@ -1002,13 +1063,14 @@ class BridgeServer(val port: Int = 8765) {
                     while (prootReader.readLine().also { pLine = it } != null) {
                         val l = pLine?.trim() ?: continue
                         if (l.isNotEmpty()) {
+                            capturedStdout.append(l).append("\n")
                             DebugLogger.d("proot agy stdout: $l")
                             writeSse(l)
                         }
                     }
                     prootProcess.waitFor()
                     exitCode = prootProcess.exitValue()
-                    DebugLogger.i("proot agy process exited with code $exitCode")
+                    DebugLogger.recordProcessRun(cmd.joinToString(" "), exitCode, capturedStdout.toString(), capturedStderr.toString())
                     if (exitCode == 0) {
                         RuntimeManager.requiresProot = true
                     }
@@ -1018,9 +1080,19 @@ class BridgeServer(val port: Int = 8765) {
             }
 
             if (exitCode != 0) {
+                val errTrimmed = capturedStderr.toString().trim()
+                val detailedMsg = if (errTrimmed.isNotEmpty()) {
+                    "Process exited with code $exitCode:\n$errTrimmed"
+                } else {
+                    "Process exited with code $exitCode"
+                }
                 val errData = JSONObject().apply {
                     put("event", "error")
-                    put("error", "Process exited with code $exitCode")
+                    put("error", detailedMsg)
+                    put("exit_code", exitCode)
+                    put("stderr", errTrimmed)
+                    put("stdout", capturedStdout.toString().takeLast(2000))
+                    put("command", cmd.joinToString(" "))
                 }.toString()
                 writeSse(errData)
             }
@@ -1041,6 +1113,50 @@ class BridgeServer(val port: Int = 8765) {
                 try { socket.close() } catch (ignored: Exception) {}
             }
         }
+    }
+
+    private fun handleDebugCliTest(payload: JSONObject, output: OutputStream) {
+        val testArg = payload.optString("arg", "--version")
+        val agy = RuntimeManager.findAgyBinary()
+        if (agy == null || !agy.exists()) {
+            sendJson(output, JSONObject().apply {
+                put("error", "agy binary not found or not ready")
+                put("standalone_ready", RuntimeManager.isStandaloneRuntimeReady())
+                put("report", DebugLogger.generateFullReport())
+            }, 500)
+            return
+        }
+
+        try {
+            val cmd = listOf(agy.absolutePath, testArg)
+            val pb = RuntimeManager.buildProcess(cmd, File(currentWorkspace), forceProot = true)
+            DebugLogger.logBanner("EXECUTING DEBUG CLI TEST", mapOf("Command" to pb.command().joinToString(" ")))
+            val p = pb.start()
+            val stdout = p.inputStream.bufferedReader(Charsets.UTF_8).readText()
+            val stderr = p.errorStream.bufferedReader(Charsets.UTF_8).readText()
+            val exitCode = p.waitFor()
+
+            DebugLogger.recordProcessRun(cmd.joinToString(" "), exitCode, stdout, stderr)
+
+            sendJson(output, JSONObject().apply {
+                put("command", pb.command().joinToString(" "))
+                put("exit_code", exitCode)
+                put("stdout", stdout)
+                put("stderr", stderr)
+                put("report", DebugLogger.generateFullReport())
+            })
+        } catch (e: Exception) {
+            DebugLogger.e("handleDebugCliTest error", e)
+            sendJson(output, JSONObject().apply {
+                put("error", e.message)
+                put("report", DebugLogger.generateFullReport())
+            }, 500)
+        }
+    }
+
+    private fun handleDebugReport(output: OutputStream) {
+        val report = DebugLogger.generateFullReport()
+        sendJson(output, JSONObject().put("report", report))
     }
 
     private fun getSettings(): JSONObject {
