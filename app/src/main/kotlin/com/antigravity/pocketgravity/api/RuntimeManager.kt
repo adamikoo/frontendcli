@@ -128,11 +128,14 @@ object RuntimeManager {
 
             // 2. Extract PRoot binaries and libraries for syscall interception
             val prootDir = File(runtimeDir, "proot")
-            val prootStamp = File(prootDir, ".stamp_v2")
+            val prootStamp = File(prootDir, ".stamp_v3")
             val prootBin = File(prootDir, "proot")
+            val prootLoader = File(prootDir, "loader")
             val oldProotStampV1 = File(prootDir, ".stamp_v1")
-            if (!prootStamp.exists() || !prootBin.exists()) {
+            val oldProotStampV2 = File(prootDir, ".stamp_v2")
+            if (!prootStamp.exists() || !prootBin.exists() || !prootLoader.exists()) {
                 try { oldProotStampV1.delete() } catch (_: Exception) {}
+                try { oldProotStampV2.delete() } catch (_: Exception) {}
                 val list = appContext.assets.list("proot_arm64") ?: emptyArray()
                 for (name in list) {
                     val target = File(prootDir, name)
@@ -328,6 +331,9 @@ object RuntimeManager {
         return candidates.firstOrNull { it.exists() && (it.canExecute() || it.length() > 0) }
     }
 
+    @Volatile
+    var requiresProot: Boolean = false
+
     fun buildProcess(
         command: List<String>,
         cwd: File = workspaceDir,
@@ -340,10 +346,12 @@ object RuntimeManager {
         val finalCmd = mutableListOf<String>()
 
         val isExecutingAgy = command.isNotEmpty() && (command[0].endsWith("agy") || command[0] == "agy" || (agy != null && command[0] == agy.absolutePath))
+        val shouldUseProot = forceProot || requiresProot
 
         if (isExecutingAgy && ldLinux != null && agy != null) {
-            if (forceProot && proot != null) {
+            if (shouldUseProot && proot != null) {
                 finalCmd.add(proot.absolutePath)
+                finalCmd.add("--kill-on-exit")
                 finalCmd.add("-0")
                 finalCmd.add("-b")
                 finalCmd.add("/system:/system")
@@ -355,30 +363,48 @@ object RuntimeManager {
                     finalCmd.add("-b")
                     finalCmd.add("/vendor:/vendor")
                 }
+                if (File("/data").exists()) {
+                    finalCmd.add("-b")
+                    finalCmd.add("/data:/data")
+                }
                 finalCmd.add("-b")
                 finalCmd.add("/dev:/dev")
                 finalCmd.add("-b")
                 finalCmd.add("/proc:/proc")
+                if (File("/linkerconfig/ld.config.txt").exists()) {
+                    finalCmd.add("-b")
+                    finalCmd.add("/linkerconfig/ld.config.txt:/linkerconfig/ld.config.txt")
+                }
+                val canonFilesDir = try { filesDir.canonicalPath } catch (_: Exception) { filesDir.absolutePath }
                 finalCmd.add("-b")
-                finalCmd.add("${filesDir.absolutePath}:${filesDir.absolutePath}")
+                finalCmd.add("$canonFilesDir:$canonFilesDir")
+                if (filesDir.absolutePath != canonFilesDir) {
+                    finalCmd.add("-b")
+                    finalCmd.add("${filesDir.absolutePath}:${filesDir.absolutePath}")
+                }
+                val canonGlibc = try { glibcDir.canonicalPath } catch (_: Exception) { glibcDir.absolutePath }
                 finalCmd.add("-b")
-                finalCmd.add("${glibcDir.absolutePath}:/lib")
+                finalCmd.add("$canonGlibc:/lib")
                 finalCmd.add("-b")
-                finalCmd.add("${glibcDir.absolutePath}:/lib64")
+                finalCmd.add("$canonGlibc:/lib64")
                 finalCmd.add("-b")
-                finalCmd.add("${glibcDir.absolutePath}:/usr/lib")
+                finalCmd.add("$canonGlibc:/usr/lib")
+                val canonBin = try { binDir.canonicalPath } catch (_: Exception) { binDir.absolutePath }
                 finalCmd.add("-b")
-                finalCmd.add("${binDir.absolutePath}:/bin")
+                finalCmd.add("$canonBin:/bin")
                 finalCmd.add("-b")
-                finalCmd.add("${binDir.absolutePath}:/usr/bin")
+                finalCmd.add("$canonBin:/usr/bin")
                 val etcDir = File(homeDir, "etc").apply { mkdirs() }
+                val canonEtc = try { etcDir.canonicalPath } catch (_: Exception) { etcDir.absolutePath }
                 finalCmd.add("-b")
-                finalCmd.add("${etcDir.absolutePath}:/etc")
+                finalCmd.add("$canonEtc:/etc")
+                val canonHome = try { homeDir.canonicalPath } catch (_: Exception) { homeDir.absolutePath }
                 finalCmd.add("-b")
-                finalCmd.add("${homeDir.absolutePath}:/home")
+                finalCmd.add("$canonHome:/home")
+
                 finalCmd.add(ldLinux.absolutePath)
                 finalCmd.add("--library-path")
-                finalCmd.add(glibcDir.absolutePath)
+                finalCmd.add(canonGlibc)
                 finalCmd.add(agy.absolutePath)
                 finalCmd.addAll(command.drop(1))
             } else {
@@ -397,8 +423,11 @@ object RuntimeManager {
         val env = pb.environment()
         env["HOME"] = homeDir.absolutePath
         val tmpDir = File(filesDir, "tmp").apply { mkdirs() }
-        env["TMPDIR"] = tmpDir.absolutePath
-        env["PROOT_TMP_DIR"] = tmpDir.absolutePath
+        val canonTmp = try { tmpDir.canonicalPath } catch (_: Exception) { tmpDir.absolutePath }
+        env["TMPDIR"] = canonTmp
+        env["PROOT_TMP_DIR"] = canonTmp
+        env["PROOT_NO_SECCOMP"] = "1"
+        env["PROOT_IGNORE_MISSING_BINDINGS"] = "1"
         env["LANG"] = "en_US.UTF-8"
         env["LC_ALL"] = "en_US.UTF-8"
         env["GLIBC_TUNABLES"] = "glibc.pthread.rseq=0"
@@ -420,8 +449,17 @@ object RuntimeManager {
         }
 
         val prootDir = File(runtimeDir, "proot")
+        val prootLoader = File(prootDir, "loader")
+        val prootLoader32 = File(prootDir, "loader32")
+        if (prootLoader.exists()) {
+            env["PROOT_LOADER"] = prootLoader.absolutePath
+        }
+        if (prootLoader32.exists()) {
+            env["PROOT_LOADER_32"] = prootLoader32.absolutePath
+        }
+
         val currentLd = env["LD_LIBRARY_PATH"] ?: ""
-        env["LD_LIBRARY_PATH"] = if (currentLd.isNotEmpty()) "${prootDir.absolutePath}:$currentLd" else prootDir.absolutePath
+        env["LD_LIBRARY_PATH"] = listOf(prootDir.absolutePath, glibcDir.absolutePath, currentLd).filter { it.isNotEmpty() }.joinToString(":")
 
         val currentPath = env["PATH"] ?: "/system/bin:/system/xbin"
         env["PATH"] = "${binDir.absolutePath}:$currentPath"

@@ -900,8 +900,8 @@ class BridgeServer(val port: Int = 8765) {
 
         var processStarted = false
         try {
-            DebugLogger.i("Spawning agy agent: ${cmd.joinToString(" ")}")
             val pb = RuntimeManager.buildProcess(cmd, File(currentWorkspace))
+            DebugLogger.i("Spawning agy process: ${pb.command().joinToString(" ")}")
             pb.redirectErrorStream(false)
             val process = pb.start()
             processStarted = true
@@ -958,10 +958,11 @@ class BridgeServer(val port: Int = 8765) {
             var exitCode = process.exitValue()
             DebugLogger.i("agy process exited with code $exitCode")
 
-            if (exitCode == 159 && RuntimeManager.findProotBinary() != null) {
-                DebugLogger.w("agy exited with code 159 (seccomp). Retrying with PRoot syscall emulation...")
+            if ((exitCode == 159 || exitCode == 139) && RuntimeManager.findProotBinary() != null && !RuntimeManager.requiresProot) {
+                DebugLogger.w("agy exited with code $exitCode (seccomp). Retrying with PRoot syscall emulation...")
                 try {
                     val pbProot = RuntimeManager.buildProcess(cmd, File(currentWorkspace), forceProot = true)
+                    DebugLogger.i("Spawning PRoot process: ${pbProot.command().joinToString(" ")}")
                     pbProot.redirectErrorStream(false)
                     val prootProcess = pbProot.start()
                     activeAgentProcess = prootProcess
@@ -979,13 +980,16 @@ class BridgeServer(val port: Int = 8765) {
                     while (prootReader.readLine().also { pLine = it } != null) {
                         val l = pLine?.trim() ?: continue
                         if (l.isNotEmpty()) {
-                            DebugLogger.d("agy stdout: $l")
+                            DebugLogger.d("proot agy stdout: $l")
                             writeSse(l)
                         }
                     }
                     prootProcess.waitFor()
                     exitCode = prootProcess.exitValue()
                     DebugLogger.i("proot agy process exited with code $exitCode")
+                    if (exitCode == 0) {
+                        RuntimeManager.requiresProot = true
+                    }
                 } catch (pe: Exception) {
                     DebugLogger.e("proot fallback execution error", pe)
                 }

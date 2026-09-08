@@ -272,3 +272,31 @@ private fun handleAuthLogout(output: OutputStream) {
    - Bumped glibc extraction stamp to `.stamp_v3` (cleaning up `.stamp_v1` and `.stamp_v2`) to force clean re-extraction of patched binaries.
    - Bumped PRoot extraction stamp to `.stamp_v2`.
 
+---
+
+## Issue 4: PRoot Helper Loader Missing (`execve("/lib/ld-linux-aarch64.so.1"): Permission denied`) — ✅ FIXED
+
+### Symptom (from Device Diagnostics on Xiaomi POCO)
+```
+[08:41:16.204] ! agy exited with code 159 (seccomp). Retrying with PRoot syscall emulation...
+[08:41:16.233] x proot agy stderr: proot error: execve("/lib/ld-linux-aarch64.so.1"): Permission denied
+[08:41:16.233] x proot agy stderr: proot info: possible causes:
+[08:41:16.233] x proot agy stderr: * the loader was not found or doesn't work.
+[08:41:16.236] x proot agy stderr: proot error: trying to remove a directory outside of '/data/user/0/com.antigravity.pocketgravity.ide/files/tmp', please report this error.
+[08:41:16.241] i proot agy process exited with code 1
+```
+
+### Root Cause
+1. PRoot on Android requires a separate userspace ELF loader binary (`loader` / `loader32`) located by default at `/data/data/com.termux/files/usr/libexec/proot/loader` or via the `PROOT_LOADER` environment variable. Without this binary, PRoot falls back to host `execve` which fails with `Permission denied` inside the Android sandbox.
+2. `PROOT_NO_SECCOMP=1` was not set, causing PRoot to attempt seccomp interception inside an already-seccomp-constrained Android process.
+3. Android symlinks `/data/user/0` to `/data/data`. PRoot's internal `probe_f2fs_bug` compared the non-canonical `PROOT_TMP_DIR` with the canonical `realpath`, triggering directory removal warnings and errors.
+
+### Fix Implemented
+1. Bundled official Termux `loader` (18,136 bytes) and `loader32` (6,244 bytes) inside `app/src/main/assets/proot_arm64/`.
+2. Bumped PRoot extraction stamp to `.stamp_v3` and added explicit validation for `loader` existence on app startup.
+3. Injected `PROOT_LOADER`, `PROOT_LOADER_32`, `PROOT_NO_SECCOMP=1`, and `PROOT_IGNORE_MISSING_BINDINGS=1` into the execution environment.
+4. Used canonical paths (`canonicalPath`) for `TMPDIR` and `PROOT_TMP_DIR` to avoid symlink mismatches.
+5. Added `--kill-on-exit` and `/data:/data` bind mount to PRoot arguments.
+6. Implemented automatic fallback and persistent `requiresProot` caching so all commands seamlessly run under PRoot once detected.
+
+
