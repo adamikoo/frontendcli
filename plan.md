@@ -248,14 +248,27 @@ private fun handleAuthLogout(output: OutputStream) {
 [06:38:18.573] i agy process exited with code 159
 ```
 
-### Root Cause
+### Root Cause (Investigated & Proven)
 - Exit 159 is `SIGSYS` (Linux signal 31).
-- Caused by glibc dynamic linker reading `AT_SECURE=1` inside Android sandbox, setting `__libc_enable_secure=1`, which silently dropped `GLIBC_TUNABLES="glibc.pthread.rseq=0"`.
-- Glibc then issued unhandled `rseq` (syscall 383), blocked by Android's seccomp filter.
+- Caused by glibc 2.36 issuing system call 293 (`rseq` - restartable sequences) during initialization.
+- Android app sandboxes (Zygote seccomp filter) do not allow `rseq` and trigger `SECCOMP_RET_TRAP`, sending `SIGSYS` (exit code 159).
+- The raw `svc #0` syscall instruction existed in **both**:
+  1. `ld-linux-aarch64.so.1` at offset `0x10400`
+  2. `libc.so.6` at offset `0x7ec50`
+- Previous attempts only patched dynamic linker security checks but left the raw syscall instructions intact, and did not patch `libc.so.6`.
+- Furthermore, PRoot fallback failed with `execve: Permission denied` because `PT_INTERP: /lib/ld-linux-aarch64.so.1` could not be resolved without `/lib` bind mounts.
 
-### Fix Implemented (commit 863e833)
-1. **Patched `ld-linux-aarch64.so.1`**: Forced `__libc_enable_secure` to `0` across all 5 checks, ensuring `GLIBC_TUNABLES="glibc.pthread.rseq=0"` is honored.
-2. **Bundled PRoot Fallback**: Included `proot_arm64/` (290 KB) in assets.
-3. **BridgeServer Retry**: If code 159 is detected on direct run, automatically re-executes with PRoot syscall emulation.
-4. **Stamp versioning**: Re-extracts patched glibc with `.stamp_v2`.
+### Fix Implemented
+1. **Binary-Patched `ld-linux-aarch64.so.1`**:
+   - `0x103e4`: Changed `cbz w1, 0x1040c` (`34000141`) to unconditional branch `b 0x1040c` (`1400000a`).
+   - `0x10400`: Changed `svc #0` (`010000d4`) to `b 0x1040c` (`14000003`) so syscall 293 is never issued.
+2. **Binary-Patched `libc.so.6`**:
+   - `0x7ec30`: Changed `tbz w0, #7, 0x7ec9c` (`36380360`) to unconditional branch `b 0x7ec9c` (`1400001b`).
+   - `0x7ec50`: Changed `svc #0` (`010000d4`) to `b 0x7ec9c` (`14000013`) so syscall 293 is never issued.
+3. **Fixed PRoot Fallback**:
+   - Added bind mounts for `/lib`, `/lib64`, `/usr/lib`, `/bin`, `/usr/bin`, `/etc`, `/home`, and conditional `/apex`, `/vendor` in `RuntimeManager.buildProcess()`.
+   - Set executable permissions on all glibc and PRoot `.so` files and binaries.
+4. **Stamp versioning**:
+   - Bumped glibc extraction stamp to `.stamp_v3` (cleaning up `.stamp_v1` and `.stamp_v2`) to force clean re-extraction of patched binaries.
+   - Bumped PRoot extraction stamp to `.stamp_v2`.
 

@@ -99,39 +99,59 @@ object RuntimeManager {
         try {
             ensureDirectories()
             // 1. Extract glibc libraries if missing or updated
-            val glibcStamp = File(glibcDir, ".stamp_v2")
+            val glibcStamp = File(glibcDir, ".stamp_v3")
             val ldLinux = File(glibcDir, "ld-linux-aarch64.so.1")
+            val oldStampV1 = File(glibcDir, ".stamp_v1")
+            val oldStampV2 = File(glibcDir, ".stamp_v2")
             if (!glibcStamp.exists() || !ldLinux.exists() || ldLinux.length() == 0L) {
+                try { oldStampV1.delete() } catch (_: Exception) {}
+                try { oldStampV2.delete() } catch (_: Exception) {}
                 val list = appContext.assets.list("glibc_arm64") ?: emptyArray()
                 for (name in list) {
                     val target = File(glibcDir, name)
                     extractAsset("glibc_arm64/$name", target)
+                    target.setReadable(true, false)
+                    target.setExecutable(true, false)
+                    try {
+                        Runtime.getRuntime().exec(arrayOf("chmod", "755", target.absolutePath)).waitFor()
+                    } catch (_: Exception) {}
                 }
                 try { glibcStamp.createNewFile() } catch (_: Exception) {}
             }
-            ldLinux.setReadable(true, false)
-            ldLinux.setExecutable(true, false)
+            glibcDir.listFiles()?.forEach { file ->
+                file.setReadable(true, false)
+                file.setExecutable(true, false)
+            }
             try {
-                Runtime.getRuntime().exec(arrayOf("chmod", "755", ldLinux.absolutePath)).waitFor()
+                Runtime.getRuntime().exec(arrayOf("chmod", "-R", "755", glibcDir.absolutePath)).waitFor()
             } catch (_: Exception) {}
 
             // 2. Extract PRoot binaries and libraries for syscall interception
             val prootDir = File(runtimeDir, "proot")
-            val prootStamp = File(prootDir, ".stamp_v1")
+            val prootStamp = File(prootDir, ".stamp_v2")
             val prootBin = File(prootDir, "proot")
+            val oldProotStampV1 = File(prootDir, ".stamp_v1")
             if (!prootStamp.exists() || !prootBin.exists()) {
+                try { oldProotStampV1.delete() } catch (_: Exception) {}
                 val list = appContext.assets.list("proot_arm64") ?: emptyArray()
                 for (name in list) {
                     val target = File(prootDir, name)
                     extractAsset("proot_arm64/$name", target)
+                    target.setReadable(true, false)
+                    target.setExecutable(true, false)
+                    try {
+                        Runtime.getRuntime().exec(arrayOf("chmod", "755", target.absolutePath)).waitFor()
+                    } catch (_: Exception) {}
                 }
-                prootBin.setReadable(true, false)
-                prootBin.setExecutable(true, false)
-                try {
-                    Runtime.getRuntime().exec(arrayOf("chmod", "755", prootBin.absolutePath)).waitFor()
-                } catch (_: Exception) {}
                 try { prootStamp.createNewFile() } catch (_: Exception) {}
             }
+            prootDir.listFiles()?.forEach { file ->
+                file.setReadable(true, false)
+                file.setExecutable(true, false)
+            }
+            try {
+                Runtime.getRuntime().exec(arrayOf("chmod", "-R", "755", prootDir.absolutePath)).waitFor()
+            } catch (_: Exception) {}
 
             // 3. Extract CA certificates if missing
             val caCert = File(runtimeDir, "ca-certificates.crt")
@@ -327,12 +347,35 @@ object RuntimeManager {
                 finalCmd.add("-0")
                 finalCmd.add("-b")
                 finalCmd.add("/system:/system")
+                if (File("/apex").exists()) {
+                    finalCmd.add("-b")
+                    finalCmd.add("/apex:/apex")
+                }
+                if (File("/vendor").exists()) {
+                    finalCmd.add("-b")
+                    finalCmd.add("/vendor:/vendor")
+                }
                 finalCmd.add("-b")
                 finalCmd.add("/dev:/dev")
                 finalCmd.add("-b")
                 finalCmd.add("/proc:/proc")
                 finalCmd.add("-b")
                 finalCmd.add("${filesDir.absolutePath}:${filesDir.absolutePath}")
+                finalCmd.add("-b")
+                finalCmd.add("${glibcDir.absolutePath}:/lib")
+                finalCmd.add("-b")
+                finalCmd.add("${glibcDir.absolutePath}:/lib64")
+                finalCmd.add("-b")
+                finalCmd.add("${glibcDir.absolutePath}:/usr/lib")
+                finalCmd.add("-b")
+                finalCmd.add("${binDir.absolutePath}:/bin")
+                finalCmd.add("-b")
+                finalCmd.add("${binDir.absolutePath}:/usr/bin")
+                val etcDir = File(homeDir, "etc").apply { mkdirs() }
+                finalCmd.add("-b")
+                finalCmd.add("${etcDir.absolutePath}:/etc")
+                finalCmd.add("-b")
+                finalCmd.add("${homeDir.absolutePath}:/home")
                 finalCmd.add(ldLinux.absolutePath)
                 finalCmd.add("--library-path")
                 finalCmd.add(glibcDir.absolutePath)
