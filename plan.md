@@ -240,7 +240,7 @@ private fun handleAuthLogout(output: OutputStream) {
 
 ---
 
-## Issue 3: `agy` Process Exits with Code 159 (`SIGSYS` - Bad System Call)
+## Issue 3: `agy` Process Exits with Code 159 (`SIGSYS` - Bad System Call) — ✅ FIXED
 
 ### Symptom (from Device Diagnostics)
 ```
@@ -248,32 +248,14 @@ private fun handleAuthLogout(output: OutputStream) {
 [06:38:18.573] i agy process exited with code 159
 ```
 
-### Root Cause Analysis
-- Exit code `159` is POSIX `$128 + 31$ = SIGSYS` (Bad System Call).
-- Android OS kernel enforces an application sandbox **SECCOMP BPF filter** that kills any process calling unpermitted Linux syscalls.
-- Typical syscall triggers in glibc/Rust binaries:
-  1. `rseq` (Restartable Sequences, syscall 383 on arm64) during thread initialization.
-  2. `clone3` (syscall 435 on arm64) used by newer glibc `pthread_create()`.
-  3. Memory management / cacheflush or sysinfo syscalls disallowed by Android zygote seccomp policy.
-- Even though `GLIBC_TUNABLES=glibc.pthread.rseq=0` is set in `buildProcess()`, invoking `ld-linux-aarch64.so.1` directly can drop or fail to parse environment tunables in certain glibc builds, or another syscall (`clone3`) is the trigger.
+### Root Cause
+- Exit 159 is `SIGSYS` (Linux signal 31).
+- Caused by glibc dynamic linker reading `AT_SECURE=1` inside Android sandbox, setting `__libc_enable_secure=1`, which silently dropped `GLIBC_TUNABLES="glibc.pthread.rseq=0"`.
+- Glibc then issued unhandled `rseq` (syscall 383), blocked by Android's seccomp filter.
 
-### Remediation Strategies (For Future Work - Do Not Fix Yet)
-
-1. **Option A: PRoot Syscall Interception (Bundled)**
-   - The app already bundles PRoot in `proot_pkg/aarch64/bin/proot` with `libtalloc.so` and `libandroid-shmem.so`.
-   - PRoot uses `ptrace(PTRACE_SYSCALL)` to intercept and emulate system calls in user space before the kernel seccomp filter can trap them.
-   - Update `buildProcess()` to route through `proot -0 -r <rootfs> ...` if direct `ld-linux` encounters seccomp.
-
-2. **Option B: Identify Exact Syscall via Logcat**
-   - Check Android system log for audit messages:
-     ```bash
-     adb logcat | grep -i "seccomp"
-     # e.g.: type=1326 audit(...): syscall=383 compat=0 ip=... code=0x0
-     ```
-   - Matches the syscall number to arm64 syscall table.
-
-3. **Option C: Explicit Tunables via CLI Arguments**
-   - Pass tunables directly to the dynamic linker:
-     `ld-linux-aarch64.so.1 --tunables glibc.pthread.rseq=0 --library-path ...`
-   - Or test `LD_PRELOAD` stub that intercepts the failing syscall and returns `ENOSYS` so glibc cleanly falls back.
+### Fix Implemented (commit 863e833)
+1. **Patched `ld-linux-aarch64.so.1`**: Forced `__libc_enable_secure` to `0` across all 5 checks, ensuring `GLIBC_TUNABLES="glibc.pthread.rseq=0"` is honored.
+2. **Bundled PRoot Fallback**: Included `proot_arm64/` (290 KB) in assets.
+3. **BridgeServer Retry**: If code 159 is detected on direct run, automatically re-executes with PRoot syscall emulation.
+4. **Stamp versioning**: Re-extracts patched glibc with `.stamp_v2`.
 
