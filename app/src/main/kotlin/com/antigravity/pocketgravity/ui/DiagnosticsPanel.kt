@@ -106,7 +106,7 @@ class DiagnosticsPanel(
 
                 val isAuth = h.authenticated
                 val authDesc = if (isAuth) {
-                    "Authenticated with Google OAuth (${h.auth?.tokenFile ?: "Token active"})"
+                    "Authenticated with Google OAuth (${h.tokenFile ?: "Token active"})"
                 } else {
                     "Unauthenticated. Tap 'Sign in with Google' or paste an Antigravity OAuth Token below."
                 }

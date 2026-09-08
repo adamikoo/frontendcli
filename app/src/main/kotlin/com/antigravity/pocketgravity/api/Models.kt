@@ -5,6 +5,7 @@ import org.json.JSONArray
 
 data class HealthResponse(
     val status: String,
+    val standalone: Boolean = false,
     val termux: Boolean,
     val ubuntu: Boolean,
     val antigravityInstalled: Boolean,
@@ -23,6 +24,7 @@ data class HealthResponse(
             val auth = json.optJSONObject("auth")
             return HealthResponse(
                 status = json.optString("status", "unknown"),
+                standalone = json.optBoolean("standalone", false),
                 termux = json.optBoolean("termux", false),
                 ubuntu = json.optBoolean("ubuntu", false),
                 antigravityInstalled = agy?.optBoolean("installed", false) ?: false,
