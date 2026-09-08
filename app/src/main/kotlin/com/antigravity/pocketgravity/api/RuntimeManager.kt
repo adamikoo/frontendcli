@@ -98,14 +98,16 @@ object RuntimeManager {
     fun extractEmbeddedRuntime() {
         try {
             ensureDirectories()
-            // 1. Extract glibc libraries if missing
+            // 1. Extract glibc libraries if missing or updated
+            val glibcStamp = File(glibcDir, ".stamp_v2")
             val ldLinux = File(glibcDir, "ld-linux-aarch64.so.1")
-            if (!ldLinux.exists() || ldLinux.length() == 0L) {
+            if (!glibcStamp.exists() || !ldLinux.exists() || ldLinux.length() == 0L) {
                 val list = appContext.assets.list("glibc_arm64") ?: emptyArray()
                 for (name in list) {
                     val target = File(glibcDir, name)
                     extractAsset("glibc_arm64/$name", target)
                 }
+                try { glibcStamp.createNewFile() } catch (_: Exception) {}
             }
             ldLinux.setReadable(true, false)
             ldLinux.setExecutable(true, false)
@@ -113,13 +115,31 @@ object RuntimeManager {
                 Runtime.getRuntime().exec(arrayOf("chmod", "755", ldLinux.absolutePath)).waitFor()
             } catch (_: Exception) {}
 
-            // 2. Extract CA certificates if missing
+            // 2. Extract PRoot binaries and libraries for syscall interception
+            val prootDir = File(runtimeDir, "proot")
+            val prootStamp = File(prootDir, ".stamp_v1")
+            val prootBin = File(prootDir, "proot")
+            if (!prootStamp.exists() || !prootBin.exists()) {
+                val list = appContext.assets.list("proot_arm64") ?: emptyArray()
+                for (name in list) {
+                    val target = File(prootDir, name)
+                    extractAsset("proot_arm64/$name", target)
+                }
+                prootBin.setReadable(true, false)
+                prootBin.setExecutable(true, false)
+                try {
+                    Runtime.getRuntime().exec(arrayOf("chmod", "755", prootBin.absolutePath)).waitFor()
+                } catch (_: Exception) {}
+                try { prootStamp.createNewFile() } catch (_: Exception) {}
+            }
+
+            // 3. Extract CA certificates if missing
             val caCert = File(runtimeDir, "ca-certificates.crt")
             if (!caCert.exists() || caCert.length() == 0L) {
                 extractAsset("ca-certificates.crt", caCert)
             }
 
-            // 3. Extract agy binary from agy_arm64.tar or agy_arm64.tar.gz if missing or incomplete
+            // 4. Extract agy binary from agy_arm64.tar or agy_arm64.tar.gz if missing or incomplete
             val agyBin = File(binDir, "agy")
             if (!agyBin.exists() || agyBin.length() < 150000000L) {
                 val binAssets = appContext.assets.list("bin") ?: emptyArray()
@@ -280,23 +300,51 @@ object RuntimeManager {
         return ver
     }
 
+    fun findProotBinary(): File? {
+        val candidates = listOf(
+            File(File(runtimeDir, "proot"), "proot"),
+            File("/data/data/com.termux/files/usr/bin/proot")
+        )
+        return candidates.firstOrNull { it.exists() && (it.canExecute() || it.length() > 0) }
+    }
+
     fun buildProcess(
         command: List<String>,
         cwd: File = workspaceDir,
-        customEnv: Map<String, String> = emptyMap()
+        customEnv: Map<String, String> = emptyMap(),
+        forceProot: Boolean = false
     ): ProcessBuilder {
         val agy = findAgyBinary()
         val ldLinux = getLdLinux()
+        val proot = findProotBinary()
         val finalCmd = mutableListOf<String>()
 
         val isExecutingAgy = command.isNotEmpty() && (command[0].endsWith("agy") || command[0] == "agy" || (agy != null && command[0] == agy.absolutePath))
 
         if (isExecutingAgy && ldLinux != null && agy != null) {
-            finalCmd.add(ldLinux.absolutePath)
-            finalCmd.add("--library-path")
-            finalCmd.add(glibcDir.absolutePath)
-            finalCmd.add(agy.absolutePath)
-            finalCmd.addAll(command.drop(1))
+            if (forceProot && proot != null) {
+                finalCmd.add(proot.absolutePath)
+                finalCmd.add("-0")
+                finalCmd.add("-b")
+                finalCmd.add("/system:/system")
+                finalCmd.add("-b")
+                finalCmd.add("/dev:/dev")
+                finalCmd.add("-b")
+                finalCmd.add("/proc:/proc")
+                finalCmd.add("-b")
+                finalCmd.add("${filesDir.absolutePath}:${filesDir.absolutePath}")
+                finalCmd.add(ldLinux.absolutePath)
+                finalCmd.add("--library-path")
+                finalCmd.add(glibcDir.absolutePath)
+                finalCmd.add(agy.absolutePath)
+                finalCmd.addAll(command.drop(1))
+            } else {
+                finalCmd.add(ldLinux.absolutePath)
+                finalCmd.add("--library-path")
+                finalCmd.add(glibcDir.absolutePath)
+                finalCmd.add(agy.absolutePath)
+                finalCmd.addAll(command.drop(1))
+            }
         } else {
             finalCmd.addAll(command)
         }
@@ -305,7 +353,9 @@ object RuntimeManager {
         pb.directory(if (cwd.exists()) cwd else workspaceDir)
         val env = pb.environment()
         env["HOME"] = homeDir.absolutePath
-        env["TMPDIR"] = File(filesDir, "tmp").apply { mkdirs() }.absolutePath
+        val tmpDir = File(filesDir, "tmp").apply { mkdirs() }
+        env["TMPDIR"] = tmpDir.absolutePath
+        env["PROOT_TMP_DIR"] = tmpDir.absolutePath
         env["LANG"] = "en_US.UTF-8"
         env["LC_ALL"] = "en_US.UTF-8"
         env["GLIBC_TUNABLES"] = "glibc.pthread.rseq=0"
@@ -325,6 +375,10 @@ object RuntimeManager {
             env["SSL_CERT_FILE"] = caCert.absolutePath
             env["SSL_CERT_DIR"] = File(runtimeDir, "certs").apply { mkdirs() }.absolutePath
         }
+
+        val prootDir = File(runtimeDir, "proot")
+        val currentLd = env["LD_LIBRARY_PATH"] ?: ""
+        env["LD_LIBRARY_PATH"] = if (currentLd.isNotEmpty()) "${prootDir.absolutePath}:$currentLd" else prootDir.absolutePath
 
         val currentPath = env["PATH"] ?: "/system/bin:/system/xbin"
         env["PATH"] = "${binDir.absolutePath}:$currentPath"

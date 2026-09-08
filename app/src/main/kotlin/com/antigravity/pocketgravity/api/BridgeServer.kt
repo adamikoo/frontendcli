@@ -955,8 +955,42 @@ class BridgeServer(val port: Int = 8765) {
             }
 
             process.waitFor()
-            val exitCode = process.exitValue()
+            var exitCode = process.exitValue()
             DebugLogger.i("agy process exited with code $exitCode")
+
+            if (exitCode == 159 && RuntimeManager.findProotBinary() != null) {
+                DebugLogger.w("agy exited with code 159 (seccomp). Retrying with PRoot syscall emulation...")
+                try {
+                    val pbProot = RuntimeManager.buildProcess(cmd, File(currentWorkspace), forceProot = true)
+                    pbProot.redirectErrorStream(false)
+                    val prootProcess = pbProot.start()
+                    activeAgentProcess = prootProcess
+                    val prootReader = BufferedReader(InputStreamReader(prootProcess.inputStream, Charsets.UTF_8))
+                    val prootErrReader = BufferedReader(InputStreamReader(prootProcess.errorStream, Charsets.UTF_8))
+                    executor.execute {
+                        try {
+                            var errL: String?
+                            while (prootErrReader.readLine().also { errL = it } != null) {
+                                errL?.let { l -> if (l.isNotEmpty()) DebugLogger.e("proot agy stderr: $l") }
+                            }
+                        } catch (_: Exception) {}
+                    }
+                    var pLine: String?
+                    while (prootReader.readLine().also { pLine = it } != null) {
+                        val l = pLine?.trim() ?: continue
+                        if (l.isNotEmpty()) {
+                            DebugLogger.d("agy stdout: $l")
+                            writeSse(l)
+                        }
+                    }
+                    prootProcess.waitFor()
+                    exitCode = prootProcess.exitValue()
+                    DebugLogger.i("proot agy process exited with code $exitCode")
+                } catch (pe: Exception) {
+                    DebugLogger.e("proot fallback execution error", pe)
+                }
+            }
+
             if (exitCode != 0) {
                 val errData = JSONObject().apply {
                     put("event", "error")
