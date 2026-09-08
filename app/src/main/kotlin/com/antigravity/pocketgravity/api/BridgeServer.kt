@@ -752,8 +752,8 @@ class BridgeServer(val port: Int = 8765) {
     }
 
     private fun handleFsRename(payload: JSONObject, output: OutputStream) {
-        val src = payload.optString("src", "")
-        val dest = payload.optString("dest", "")
+        val src = payload.optString("src", payload.optString("oldPath", ""))
+        val dest = payload.optString("dest", payload.optString("newPath", ""))
         val srcFile = File(src)
         val destFile = File(dest)
         if (!srcFile.exists()) {

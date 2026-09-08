@@ -417,8 +417,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 self.send_json({"error": str(e)}, 500)
 
         elif path == "/api/fs/rename":
-            src = payload.get("src", "")
-            dest = payload.get("dest", "")
+            src = payload.get("src") or payload.get("oldPath", "")
+            dest = payload.get("dest") or payload.get("newPath", "")
             if not src or not dest or not os.path.exists(src):
                 self.send_json({"error": "Invalid source or destination"}, 400)
                 return
