@@ -408,7 +408,8 @@ class BridgeServer(val port: Int = 8765) {
 
     private fun handleAuthStatus(output: OutputStream) {
         val token = getValidAccessToken()
-        val auth = token.isNotEmpty()
+        val adcFile = File(RuntimeManager.homeDir, ".config/gcloud/application_default_credentials.json")
+        val auth = token.isNotEmpty() || adcFile.exists()
         sendJson(output, JSONObject().put("authenticated", auth).put("token_file", RuntimeManager.agyTokenFile.absolutePath))
     }
 
@@ -419,7 +420,7 @@ class BridgeServer(val port: Int = 8765) {
         if (agy != null && agy.exists()) {
             try {
                 DebugLogger.i("Executing agy auth login at: ${agy.absolutePath}")
-                val pb = RuntimeManager.buildProcess(listOf(agy.absolutePath, "auth", "login"), File(currentWorkspace))
+                val pb = RuntimeManager.buildProcess(listOf(agy.absolutePath, "auth", "login"), File(currentWorkspace), forceProot = true)
                 pb.redirectErrorStream(true)
                 val process = pb.start()
                 val reader = BufferedReader(InputStreamReader(process.inputStream, "UTF-8"))
@@ -466,6 +467,9 @@ class BridgeServer(val port: Int = 8765) {
                 File(RuntimeManager.homeDir, ".gemini/antigravity/mcp_oauth_tokens.json"),
                 File(RuntimeManager.homeDir, ".config/agy/credentials.json"),
                 File(RuntimeManager.homeDir, ".gemini/google_accounts.json"),
+                File(RuntimeManager.homeDir, ".config/gcloud/application_default_credentials.json"),
+                File(RuntimeManager.agyConfigDir, "application_default_credentials.json"),
+                File(RuntimeManager.homeDir, ".gemini/application_default_credentials.json"),
                 File("/data/data/com.termux/files/home/.gemini/antigravity-cli/antigravity-oauth-token"),
                 File("/root/.gemini/antigravity-cli/antigravity-oauth-token")
             )
@@ -484,7 +488,7 @@ class BridgeServer(val port: Int = 8765) {
                 saveSettings(settings)
             }
 
-            DebugLogger.i("User logged out, all token files deleted")
+            DebugLogger.i("User logged out, all token and ADC credential files deleted")
             sendJson(output, JSONObject().put("status", "ok").put("authenticated", false))
         } catch (e: Exception) {
             sendJson(output, JSONObject().put("error", e.message), 500)
@@ -539,9 +543,13 @@ class BridgeServer(val port: Int = 8765) {
                 }
                 sendJson(output, JSONObject().put("error", "Failed to exchange authorization code with Google"), 400)
                 return
-            } else if (input.startsWith("AIza")) {
+            } else if (input.startsWith("AIza") || (!input.startsWith("ya29") && !input.contains(" "))) {
+                // Direct Gemini API Key
                 val settings = getSettings()
                 settings.put("modelProvider", "gemini")
+                if (!settings.has("model") || settings.optString("model").isEmpty()) {
+                    settings.put("model", "gemini-2.5-flash")
+                }
                 saveSettings(settings)
                 DebugLogger.i("Configured modelProvider=gemini in settings.json for Gemini API key")
             }
@@ -556,13 +564,36 @@ class BridgeServer(val port: Int = 8765) {
     }
 
     private fun persistOAuthCredentials(respJson: JSONObject, accessToken: String) {
-        // Prepare StoredToken JSON struct for agy keyring storage
+        val refreshToken = respJson.optString("refresh_token", "")
+
+        // 1. Google Cloud Application Default Credentials (ADC) format
+        if (refreshToken.isNotEmpty()) {
+            val adcObj = JSONObject().apply {
+                put("type", "authorized_user")
+                put("client_id", "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com")
+                put("client_secret", "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")
+                put("refresh_token", refreshToken)
+            }
+            val adcTargets = listOf(
+                File(RuntimeManager.homeDir, ".config/gcloud/application_default_credentials.json"),
+                File(RuntimeManager.agyConfigDir, "application_default_credentials.json"),
+                File(RuntimeManager.homeDir, ".gemini/application_default_credentials.json")
+            )
+            for (at in adcTargets) {
+                try {
+                    at.parentFile?.mkdirs()
+                    at.writeText(adcObj.toString(2))
+                } catch (_: Exception) {}
+            }
+            DebugLogger.i("Saved Google Cloud ADC credentials to ${adcTargets[0].absolutePath}")
+        }
+
+        // 2. Prepare StoredToken JSON struct for agy keyring storage
         val storedTokenObj = JSONObject().apply {
             put("auth_method", "oauth")
             put("user_tier", "FREE")
             put("project_id", "default-cli-project")
             put("access_token", accessToken)
-            val refreshToken = respJson.optString("refresh_token", "")
             if (refreshToken.isNotEmpty()) put("refresh_token", refreshToken)
             put("token_type", respJson.optString("token_type", "Bearer"))
             put("expiry_date", respJson.optLong("expiry_date", System.currentTimeMillis() + 3300 * 1000))

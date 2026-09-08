@@ -93,8 +93,17 @@ class DiagnosticsPanel(
                     "Antigravity CLI (agy) not found in Linux environment"
                 }
                 addTierCard("Antigravity CLI Runtime", h.antigravityInstalled, agyDesc)
-                addTierCard("POSIX Workspace", true, "Mounted at ${h.workspace}")
-                addTierCard("Google OAuth Authentication", h.authenticated, if (h.authenticated) "Authenticated via Google OAuth (Token present)" else "Unauthenticated. Tap 'Sign in with Google' below.")
+                val adcExists = java.io.File(com.antigravity.pocketgravity.api.RuntimeManager.homeDir, ".config/gcloud/application_default_credentials.json").exists()
+                val tokenFile = com.antigravity.pocketgravity.api.RuntimeManager.agyTokenFile
+                val isGeminiKey = tokenFile.exists() && tokenFile.readText().trim().startsWith("AIza")
+                val isAuth = h.authenticated || adcExists || isGeminiKey
+                val authDesc = when {
+                    isGeminiKey -> "Authenticated via Gemini API Key (Direct API active)"
+                    adcExists -> "Authenticated via Google OAuth (ADC active)"
+                    h.authenticated -> "Authenticated (Token present)"
+                    else -> "Unauthenticated. Tap 'Sign in with Google' or paste a free Gemini API Key below."
+                }
+                addTierCard("Google / Gemini Authentication", isAuth, authDesc)
 
                 val actionRow = LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
@@ -103,7 +112,7 @@ class DiagnosticsPanel(
                     }
                 }
 
-                if (!h.authenticated) {
+                if (!isAuth) {
                     val loginBtn = Button(context).apply {
                         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                             marginEnd = 6
@@ -136,26 +145,26 @@ class DiagnosticsPanel(
                         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                             marginStart = 6
                         }
-                        text = "Paste Token"
+                        text = "Paste API Key / Token"
                         textSize = 11.5f
                         setTextColor(Color.WHITE)
                         setBackgroundResource(R.drawable.bg_chip)
                         setOnClickListener {
                             val input = EditText(context).apply {
-                                hint = "Paste Token"
+                                hint = "Gemini API Key (AIza...) or Token"
                                 setHintTextColor(Color.parseColor("#64748B"))
                                 textAlignment = android.view.View.TEXT_ALIGNMENT_VIEW_START
                                 setTextColor(Color.parseColor("#F8FAFC"))
                             }
                             AlertDialog.Builder(context)
-                                .setTitle("Set API Token")
-                                .setMessage("Paste your Antigravity token:")
+                                .setTitle("Set API Key / Token")
+                                .setMessage("Paste your free Gemini API Key (starts with AIza from aistudio.google.com) or Antigravity Token:")
                                 .setView(input)
                                 .setPositiveButton("Save") { _, _ ->
                                     val token = input.text.toString().trim()
                                     if (token.isNotEmpty()) {
                                         bridgeClient.saveToken(token) {
-                                            Toast.makeText(context, "Token saved!", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "Credential saved!", Toast.LENGTH_SHORT).show()
                                             runDiagnostics()
                                             onRefreshRequested()
                                         }

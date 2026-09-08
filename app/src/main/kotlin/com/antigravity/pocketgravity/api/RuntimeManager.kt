@@ -332,7 +332,7 @@ object RuntimeManager {
     }
 
     @Volatile
-    var requiresProot: Boolean = false
+    var requiresProot: Boolean = true
 
     fun buildProcess(
         command: List<String>,
@@ -401,6 +401,8 @@ object RuntimeManager {
                 val canonHome = try { homeDir.canonicalPath } catch (_: Exception) { homeDir.absolutePath }
                 finalCmd.add("-b")
                 finalCmd.add("$canonHome:/home")
+                finalCmd.add("-b")
+                finalCmd.add("$canonHome:/root")
 
                 finalCmd.add(ldLinux.absolutePath)
                 finalCmd.add("--library-path")
@@ -432,6 +434,7 @@ object RuntimeManager {
         env["LC_ALL"] = "en_US.UTF-8"
         env["GLIBC_TUNABLES"] = "glibc.pthread.rseq=0"
         env["GODEBUG"] = "netdns=go"
+        env["NO_COLOR"] = "1"
 
         val etcDir = File(homeDir, "etc").apply { mkdirs() }
         val resolvConf = File(etcDir, "resolv.conf")
@@ -463,6 +466,32 @@ object RuntimeManager {
 
         val currentPath = env["PATH"] ?: "/system/bin:/system/xbin"
         env["PATH"] = "${binDir.absolutePath}:$currentPath"
+
+        // Authentications:
+        // 1. Google Cloud Application Default Credentials (ADC)
+        val adcCandidates = listOf(
+            File(homeDir, ".config/gcloud/application_default_credentials.json"),
+            File(agyConfigDir, "application_default_credentials.json")
+        )
+        val adcFile = adcCandidates.firstOrNull { it.exists() && it.length() > 0 }
+        if (adcFile != null) {
+            env["GOOGLE_APPLICATION_CREDENTIALS"] = adcFile.absolutePath
+        }
+
+        // 2. Gemini API Key (Direct)
+        val tokenFile = agyTokenFile
+        if (tokenFile.exists()) {
+            val raw = tokenFile.readText().trim()
+            val token = if (raw.startsWith("{")) {
+                try { JSONObject(raw).optString("access_token", "") } catch (_: Exception) { "" }
+            } else {
+                raw
+            }
+            if (token.startsWith("AIza") || (token.isNotEmpty() && !token.startsWith("ya29") && !token.contains(" "))) {
+                env["GEMINI_API_KEY"] = token
+                env["GOOGLE_API_KEY"] = token
+            }
+        }
 
         for ((k, v) in customEnv) {
             env[k] = v
