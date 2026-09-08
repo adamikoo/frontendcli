@@ -95,15 +95,13 @@ class DiagnosticsPanel(
                 addTierCard("Antigravity CLI Runtime", h.antigravityInstalled, agyDesc)
                 val adcExists = java.io.File(com.antigravity.pocketgravity.api.RuntimeManager.homeDir, ".config/gcloud/application_default_credentials.json").exists()
                 val tokenFile = com.antigravity.pocketgravity.api.RuntimeManager.agyTokenFile
-                val isGeminiKey = tokenFile.exists() && tokenFile.readText().trim().startsWith("AIza")
-                val isAuth = h.authenticated || adcExists || isGeminiKey
+                val isAuth = h.authenticated || adcExists || tokenFile.exists()
                 val authDesc = when {
-                    isGeminiKey -> "Authenticated via Gemini API Key (Direct API active)"
                     adcExists -> "Authenticated via Google OAuth (ADC active)"
-                    h.authenticated -> "Authenticated (Token present)"
-                    else -> "Unauthenticated. Tap 'Sign in with Google' or paste a free Gemini API Key below."
+                    h.authenticated || tokenFile.exists() -> "Authenticated (Token present)"
+                    else -> "Unauthenticated. Tap 'Sign in with Google' or paste an Antigravity OAuth Token below."
                 }
-                addTierCard("Google / Gemini Authentication", isAuth, authDesc)
+                addTierCard("Antigravity Authentication", isAuth, authDesc)
 
                 val actionRow = LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
@@ -145,26 +143,26 @@ class DiagnosticsPanel(
                         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                             marginStart = 6
                         }
-                        text = "Paste API Key / Token"
+                        text = "Paste OAuth Token"
                         textSize = 11.5f
                         setTextColor(Color.WHITE)
                         setBackgroundResource(R.drawable.bg_chip)
                         setOnClickListener {
                             val input = EditText(context).apply {
-                                hint = "Gemini API Key (AIza...) or Token"
+                                hint = "Antigravity OAuth Token or Refresh Token"
                                 setHintTextColor(Color.parseColor("#64748B"))
                                 textAlignment = android.view.View.TEXT_ALIGNMENT_VIEW_START
                                 setTextColor(Color.parseColor("#F8FAFC"))
                             }
                             AlertDialog.Builder(context)
-                                .setTitle("Set API Key / Token")
-                                .setMessage("Paste your free Gemini API Key (starts with AIza from aistudio.google.com) or Antigravity Token:")
+                                .setTitle("Set Antigravity Token")
+                                .setMessage("Paste your Antigravity Google OAuth Token or Refresh Token:")
                                 .setView(input)
                                 .setPositiveButton("Save") { _, _ ->
                                     val token = input.text.toString().trim()
                                     if (token.isNotEmpty()) {
                                         bridgeClient.saveToken(token) {
-                                            Toast.makeText(context, "Credential saved!", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "Token saved!", Toast.LENGTH_SHORT).show()
                                             runDiagnostics()
                                             onRefreshRequested()
                                         }

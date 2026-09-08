@@ -140,17 +140,17 @@ class SettingsPanel(
             }
         }
 
-        addSettingRow("Authentication Token / API Key", "Tap to edit") {
+        addSettingRow("Antigravity OAuth Token", "Tap to edit") {
             val tokenFile = com.antigravity.pocketgravity.api.RuntimeManager.agyTokenFile
             val current = if (tokenFile.exists()) tokenFile.readText() else ""
             val input = EditText(context).apply {
                 setText(current)
-                hint = "Antigravity OAuth Token / Gemini API Key"
+                hint = "Antigravity OAuth Token / Refresh Token"
                 setHintTextColor(Color.parseColor("#64748B"))
                 setTextColor(Color.parseColor("#F8FAFC"))
             }
             AlertDialog.Builder(context)
-                .setTitle("Authentication Credential")
+                .setTitle("Antigravity OAuth Token")
                 .setView(input)
                 .setPositiveButton("Save") { _, _ ->
                     val newToken = input.text.toString().trim()

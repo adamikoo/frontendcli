@@ -543,15 +543,6 @@ class BridgeServer(val port: Int = 8765) {
                 }
                 sendJson(output, JSONObject().put("error", "Failed to exchange authorization code with Google"), 400)
                 return
-            } else if (input.startsWith("AIza") || (!input.startsWith("ya29") && !input.contains(" "))) {
-                // Direct Gemini API Key
-                val settings = getSettings()
-                settings.put("modelProvider", "gemini")
-                if (!settings.has("model") || settings.optString("model").isEmpty()) {
-                    settings.put("model", "gemini-2.5-flash")
-                }
-                saveSettings(settings)
-                DebugLogger.i("Configured modelProvider=gemini in settings.json for Gemini API key")
             }
 
             RuntimeManager.agyTokenFile.parentFile?.mkdirs()
