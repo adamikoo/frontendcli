@@ -81,7 +81,7 @@ echo "========================"
 
 echo "=== 1. Generating R.java with aapt ==="
 mkdir -p "$BUILD_DIR/gen" "$BUILD_DIR/classes" "$BUILD_DIR/dex" "$OUT_DIR"
-"$AAPT_BIN" package -f -m -J "$BUILD_DIR/gen" -M "$APP_DIR/src/main/AndroidManifest.xml" -S "$APP_DIR/src/main/res" -I "$ANDROID_JAR"
+"$AAPT_BIN" package -f -m --custom-package com.antigravity.pocketgravity -J "$BUILD_DIR/gen" -M "$APP_DIR/src/main/AndroidManifest.xml" -S "$APP_DIR/src/main/res" -I "$ANDROID_JAR"
 
 echo "=== 2. Compiling Kotlin and Java sources ==="
 kotlinc -jvm-target 17 \
