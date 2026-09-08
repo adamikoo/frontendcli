@@ -66,12 +66,16 @@ object RuntimeManager {
             return candidates.firstOrNull { it.exists() } ?: candidates[0]
         }
 
+    val rootfsDir: File
+        get() = File(runtimeDir, "rootfs")
+
     private fun ensureDirectories() {
         binDir.mkdirs()
         glibcDir.mkdirs()
         homeDir.mkdirs()
         workspaceDir.mkdirs()
         agyConfigDir.mkdirs()
+        rootfsDir.mkdirs()
 
         val etcDir = File(homeDir, "etc").apply { mkdirs() }
         val resolvConf = File(etcDir, "resolv.conf")
@@ -92,6 +96,87 @@ object RuntimeManager {
             try {
                 readme.writeText("# Pocket Gravity Workspace\n\nWelcome to Pocket Gravity standalone environment.\nUse the Agent tab to chat with Antigravity, edit files in the Editor, or explore files in Explorer.\n")
             } catch (_: Exception) {}
+        }
+    }
+
+    fun setupRootfs() {
+        try {
+            val rootfs = rootfsDir
+            val libDir = File(rootfs, "lib").apply { mkdirs() }
+            val lib64Dir = File(rootfs, "lib64").apply { mkdirs() }
+            val usrLibDir = File(rootfs, "usr/lib").apply { mkdirs() }
+            val rootfsBin = File(rootfs, "bin").apply { mkdirs() }
+            val rootfsUsrBin = File(rootfs, "usr/bin").apply { mkdirs() }
+            val rootfsEtc = File(rootfs, "etc").apply { mkdirs() }
+            val rootfsSsl = File(rootfs, "etc/ssl/certs").apply { mkdirs() }
+            File(rootfs, "tmp").mkdirs()
+            File(rootfs, "root").mkdirs()
+            File(rootfs, "home").mkdirs()
+            File(rootfs, "workspace").mkdirs()
+            File(rootfs, "dev").mkdirs()
+            File(rootfs, "proc").mkdirs()
+            File(rootfs, "sys").mkdirs()
+            File(rootfs, "system").mkdirs()
+
+            // 1. Copy clean glibc libraries into rootfs /lib, /lib64, /usr/lib
+            glibcDir.listFiles()?.filter { !it.name.startsWith(".") }?.forEach { src ->
+                listOf(File(libDir, src.name), File(lib64Dir, src.name), File(usrLibDir, src.name)).forEach { dst ->
+                    if (!dst.exists() || dst.length() != src.length()) {
+                        try {
+                            src.copyTo(dst, overwrite = true)
+                            dst.setReadable(true, false)
+                            dst.setExecutable(true, false)
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+
+            // 2. Copy agy into rootfs /bin/agy and /usr/bin/agy
+            val agyBin = File(binDir, "agy")
+            if (agyBin.exists() && agyBin.length() > 0) {
+                listOf(File(rootfsBin, "agy"), File(rootfsUsrBin, "agy")).forEach { dst ->
+                    if (!dst.exists() || dst.length() != agyBin.length()) {
+                        try {
+                            agyBin.copyTo(dst, overwrite = true)
+                            dst.setReadable(true, false)
+                            dst.setExecutable(true, false)
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+
+            // 3. Setup resolv.conf and hosts in rootfs /etc
+            val resolvConf = File(rootfsEtc, "resolv.conf")
+            if (!resolvConf.exists()) {
+                try {
+                    resolvConf.writeText("nameserver 8.8.8.8\nnameserver 8.8.4.4\n")
+                } catch (_: Exception) {}
+            }
+            val hostsFile = File(rootfsEtc, "hosts")
+            if (!hostsFile.exists()) {
+                try {
+                    hostsFile.writeText("127.0.0.1 localhost\n::1 localhost\n")
+                } catch (_: Exception) {}
+            }
+
+            // 4. Setup CA certs in rootfs /etc/ssl/certs/ca-certificates.crt
+            val caCert = File(runtimeDir, "ca-certificates.crt")
+            if (caCert.exists()) {
+                val dstCert = File(rootfsSsl, "ca-certificates.crt")
+                if (!dstCert.exists() || dstCert.length() != caCert.length()) {
+                    try { caCert.copyTo(dstCert, overwrite = true) } catch (_: Exception) {}
+                }
+                val dstCertEtc = File(rootfsEtc, "ca-certificates.crt")
+                if (!dstCertEtc.exists() || dstCertEtc.length() != caCert.length()) {
+                    try { caCert.copyTo(dstCertEtc, overwrite = true) } catch (_: Exception) {}
+                }
+            }
+
+            try {
+                Runtime.getRuntime().exec(arrayOf("chmod", "-R", "755", rootfs.absolutePath)).waitFor()
+            } catch (_: Exception) {}
+        } catch (e: Exception) {
+            DebugLogger.e("RuntimeManager setupRootfs error", e)
         }
     }
 
@@ -176,6 +261,9 @@ object RuntimeManager {
             try {
                 Runtime.getRuntime().exec(arrayOf("chmod", "755", agyBin.absolutePath)).waitFor()
             } catch (_: Exception) {}
+
+            // 5. Populate and prepare standalone guest rootfs
+            setupRootfs()
         } catch (e: Exception) {
             DebugLogger.e("RuntimeManager extract error", e)
         }
@@ -267,6 +355,9 @@ object RuntimeManager {
     }
 
     fun findAgyBinary(): File? {
+        val rootfsAgy = File(rootfsDir, "bin/agy")
+        if (rootfsAgy.exists() && rootfsAgy.length() > 150000000L) return rootfsAgy
+
         val embeddedAgy = File(binDir, "agy")
         if (embeddedAgy.exists() && embeddedAgy.length() > 150000000L) return embeddedAgy
 
@@ -279,6 +370,8 @@ object RuntimeManager {
     }
 
     fun getLdLinux(): File? {
+        val rootfsLd = File(rootfsDir, "lib/ld-linux-aarch64.so.1")
+        if (rootfsLd.exists()) return rootfsLd
         val f = File(glibcDir, "ld-linux-aarch64.so.1")
         return if (f.exists()) f else null
     }
@@ -338,84 +431,62 @@ object RuntimeManager {
         command: List<String>,
         cwd: File = workspaceDir,
         customEnv: Map<String, String> = emptyMap(),
-        forceProot: Boolean = false
+        forceProot: Boolean = true
     ): ProcessBuilder {
         val agy = findAgyBinary()
-        val ldLinux = getLdLinux()
         val proot = findProotBinary()
         val finalCmd = mutableListOf<String>()
 
         val isExecutingAgy = command.isNotEmpty() && (command[0].endsWith("agy") || command[0] == "agy" || (agy != null && command[0] == agy.absolutePath))
-        val shouldUseProot = forceProot || requiresProot
 
-        if (isExecutingAgy && ldLinux != null && agy != null) {
-            if (shouldUseProot && proot != null) {
-                finalCmd.add(proot.absolutePath)
-                finalCmd.add("--kill-on-exit")
-                finalCmd.add("-0")
-                finalCmd.add("-b")
-                finalCmd.add("/system:/system")
-                if (File("/apex").exists()) {
-                    finalCmd.add("-b")
-                    finalCmd.add("/apex:/apex")
-                }
-                if (File("/vendor").exists()) {
-                    finalCmd.add("-b")
-                    finalCmd.add("/vendor:/vendor")
-                }
-                if (File("/data").exists()) {
-                    finalCmd.add("-b")
-                    finalCmd.add("/data:/data")
-                }
-                finalCmd.add("-b")
-                finalCmd.add("/dev:/dev")
-                finalCmd.add("-b")
-                finalCmd.add("/proc:/proc")
-                if (File("/linkerconfig/ld.config.txt").exists()) {
-                    finalCmd.add("-b")
-                    finalCmd.add("/linkerconfig/ld.config.txt:/linkerconfig/ld.config.txt")
-                }
-                val canonFilesDir = try { filesDir.canonicalPath } catch (_: Exception) { filesDir.absolutePath }
-                finalCmd.add("-b")
-                finalCmd.add("$canonFilesDir:$canonFilesDir")
-                if (filesDir.absolutePath != canonFilesDir) {
-                    finalCmd.add("-b")
-                    finalCmd.add("${filesDir.absolutePath}:${filesDir.absolutePath}")
-                }
-                val canonGlibc = try { glibcDir.canonicalPath } catch (_: Exception) { glibcDir.absolutePath }
-                finalCmd.add("-b")
-                finalCmd.add("$canonGlibc:/lib")
-                finalCmd.add("-b")
-                finalCmd.add("$canonGlibc:/lib64")
-                finalCmd.add("-b")
-                finalCmd.add("$canonGlibc:/usr/lib")
-                val canonBin = try { binDir.canonicalPath } catch (_: Exception) { binDir.absolutePath }
-                finalCmd.add("-b")
-                finalCmd.add("$canonBin:/bin")
-                finalCmd.add("-b")
-                finalCmd.add("$canonBin:/usr/bin")
-                val etcDir = File(homeDir, "etc").apply { mkdirs() }
-                val canonEtc = try { etcDir.canonicalPath } catch (_: Exception) { etcDir.absolutePath }
-                finalCmd.add("-b")
-                finalCmd.add("$canonEtc:/etc")
-                val canonHome = try { homeDir.canonicalPath } catch (_: Exception) { homeDir.absolutePath }
-                finalCmd.add("-b")
-                finalCmd.add("$canonHome:/home")
-                finalCmd.add("-b")
-                finalCmd.add("$canonHome:/root")
+        if (isExecutingAgy && proot != null && rootfsDir.exists()) {
+            finalCmd.add(proot.absolutePath)
+            finalCmd.add("--kill-on-exit")
+            finalCmd.add("-0")
 
-                finalCmd.add(ldLinux.absolutePath)
-                finalCmd.add("--library-path")
-                finalCmd.add(canonGlibc)
-                finalCmd.add(agy.absolutePath)
-                finalCmd.addAll(command.drop(1))
-            } else {
-                finalCmd.add(ldLinux.absolutePath)
-                finalCmd.add("--library-path")
-                finalCmd.add(glibcDir.absolutePath)
-                finalCmd.add(agy.absolutePath)
-                finalCmd.addAll(command.drop(1))
+            val canonRootfs = try { rootfsDir.canonicalPath } catch (_: Exception) { rootfsDir.absolutePath }
+            finalCmd.add("-r")
+            finalCmd.add(canonRootfs)
+
+            finalCmd.add("-b")
+            finalCmd.add("/dev:/dev")
+            finalCmd.add("-b")
+            finalCmd.add("/proc:/proc")
+            finalCmd.add("-b")
+            finalCmd.add("/system:/system")
+
+            if (File("/apex").exists()) {
+                finalCmd.add("-b")
+                finalCmd.add("/apex:/apex")
             }
+            if (File("/vendor").exists()) {
+                finalCmd.add("-b")
+                finalCmd.add("/vendor:/vendor")
+            }
+            if (File("/data").exists()) {
+                finalCmd.add("-b")
+                finalCmd.add("/data:/data")
+            }
+            if (File("/linkerconfig/ld.config.txt").exists()) {
+                finalCmd.add("-b")
+                finalCmd.add("/linkerconfig/ld.config.txt:/linkerconfig/ld.config.txt")
+            }
+
+            val canonHome = try { homeDir.canonicalPath } catch (_: Exception) { homeDir.absolutePath }
+            finalCmd.add("-b")
+            finalCmd.add("$canonHome:/root")
+            finalCmd.add("-b")
+            finalCmd.add("$canonHome:/home")
+
+            val targetCwd = if (cwd.exists()) cwd else workspaceDir
+            val canonCwd = try { targetCwd.canonicalPath } catch (_: Exception) { targetCwd.absolutePath }
+            finalCmd.add("-b")
+            finalCmd.add("$canonCwd:/workspace")
+            finalCmd.add("-w")
+            finalCmd.add("/workspace")
+
+            finalCmd.add("/bin/agy")
+            finalCmd.addAll(command.drop(1))
         } else {
             finalCmd.addAll(command)
         }
@@ -423,8 +494,9 @@ object RuntimeManager {
         val pb = ProcessBuilder(finalCmd)
         pb.directory(if (cwd.exists()) cwd else workspaceDir)
         val env = pb.environment()
-        env["HOME"] = homeDir.absolutePath
-        val tmpDir = File(filesDir, "tmp").apply { mkdirs() }
+
+        env["HOME"] = "/root"
+        val tmpDir = File(rootfsDir, "tmp").apply { mkdirs() }
         val canonTmp = try { tmpDir.canonicalPath } catch (_: Exception) { tmpDir.absolutePath }
         env["TMPDIR"] = canonTmp
         env["PROOT_TMP_DIR"] = canonTmp
@@ -435,21 +507,8 @@ object RuntimeManager {
         env["GLIBC_TUNABLES"] = "glibc.pthread.rseq=0"
         env["GODEBUG"] = "netdns=go"
         env["NO_COLOR"] = "1"
-
-        val etcDir = File(homeDir, "etc").apply { mkdirs() }
-        val resolvConf = File(etcDir, "resolv.conf")
-        if (!resolvConf.exists()) {
-            try {
-                resolvConf.writeText("nameserver 8.8.8.8\nnameserver 8.8.4.4\n")
-            } catch (_: Exception) {}
-        }
-        env["RESOLV_CONF"] = resolvConf.absolutePath
-
-        val caCert = File(runtimeDir, "ca-certificates.crt")
-        if (caCert.exists()) {
-            env["SSL_CERT_FILE"] = caCert.absolutePath
-            env["SSL_CERT_DIR"] = File(runtimeDir, "certs").apply { mkdirs() }.absolutePath
-        }
+        env["SSL_CERT_FILE"] = "/etc/ssl/certs/ca-certificates.crt"
+        env["SSL_CERT_DIR"] = "/etc/ssl/certs"
 
         val prootDir = File(runtimeDir, "proot")
         val prootLoader = File(prootDir, "loader")
@@ -465,7 +524,7 @@ object RuntimeManager {
         env["LD_LIBRARY_PATH"] = listOf(prootDir.absolutePath, glibcDir.absolutePath, currentLd).filter { it.isNotEmpty() }.joinToString(":")
 
         val currentPath = env["PATH"] ?: "/system/bin:/system/xbin"
-        env["PATH"] = "${binDir.absolutePath}:$currentPath"
+        env["PATH"] = "/bin:/usr/bin:$currentPath"
 
         // Google OAuth Credentials for Antigravity (Application Default Credentials)
         val adcCandidates = listOf(
@@ -474,7 +533,8 @@ object RuntimeManager {
         )
         val adcFile = adcCandidates.firstOrNull { it.exists() && it.length() > 0 }
         if (adcFile != null) {
-            env["GOOGLE_APPLICATION_CREDENTIALS"] = adcFile.absolutePath
+            val relPath = adcFile.relativeTo(homeDir).path.replace('\\', '/')
+            env["GOOGLE_APPLICATION_CREDENTIALS"] = "/root/$relPath"
         }
 
         for ((k, v) in customEnv) {

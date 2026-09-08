@@ -62,7 +62,12 @@ class BridgeService : Service() {
             DebugLogger.e("Failed to acquire wakeLock on BridgeService", e)
         }
 
-        server = BridgeServer(8765).apply { start() }
+        try {
+            server = BridgeServer(8765).apply { start() }
+            DebugLogger.i("In-app BridgeServer listening on port 8765")
+        } catch (e: Exception) {
+            DebugLogger.e("Failed to start in-app BridgeServer", e)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

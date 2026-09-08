@@ -140,12 +140,9 @@ class SettingsPanel(
             }
         }
 
-        addSettingRow("Antigravity OAuth Token", "Tap to edit") {
-            val tokenFile = com.antigravity.pocketgravity.api.RuntimeManager.agyTokenFile
-            val current = if (tokenFile.exists()) tokenFile.readText() else ""
+        addSettingRow("Antigravity OAuth Token", "Tap to edit or paste") {
             val input = EditText(context).apply {
-                setText(current)
-                hint = "Antigravity OAuth Token / Refresh Token"
+                hint = "Paste OAuth Token or Refresh Token"
                 setHintTextColor(Color.parseColor("#64748B"))
                 setTextColor(Color.parseColor("#F8FAFC"))
             }

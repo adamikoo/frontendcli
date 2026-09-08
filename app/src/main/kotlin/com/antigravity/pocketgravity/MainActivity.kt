@@ -74,6 +74,7 @@ class MainActivity : Activity() {
         }
 
         com.antigravity.pocketgravity.api.RuntimeManager.init(this)
+        com.antigravity.pocketgravity.api.AssetExporter.exportBridgeFiles(this)
         com.antigravity.pocketgravity.api.BridgeService.start(this)
 
         bridgeClient = BridgeClient(this)

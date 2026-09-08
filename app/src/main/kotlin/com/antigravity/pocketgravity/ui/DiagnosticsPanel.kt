@@ -82,24 +82,33 @@ class DiagnosticsPanel(
             cardsContainer.removeAllViews()
 
             res.onSuccess { h ->
+                val isStandalone = h.standalone || com.antigravity.pocketgravity.api.RuntimeManager.isStandaloneRuntimeReady()
+                val runtimeTitle = if (isStandalone) "Embedded PRoot Engine" else "Termux Environment"
+                val runtimeDesc = if (isStandalone) {
+                    "Standalone Runtime Active (Embedded PRoot userspace emulation + Glibc ARM64)"
+                } else {
+                    val termuxInstalled = try {
+                        context.packageManager.getPackageInfo("com.termux", 0) != null
+                    } catch (_: Exception) { false }
+                    if (termuxInstalled) "Termux App Installed" else "External bridge active"
+                }
+                addTierCard(runtimeTitle, true, runtimeDesc)
+
+                addTierCard("Bridge Daemon", true, "Connected to ${bridgeClient.baseUrl} (${h.workspace})")
+
                 val agyDesc = if (h.antigravityInstalled) {
-                    val path = h.antigravityPath ?: ""
-                    if (path.contains("standalone") || path.contains("embedded")) {
-                        "Standalone Antigravity Engine (Active - zero external dependencies)"
-                    } else {
-                        "Installed (${h.antigravityVersion ?: "detected"}) at $path"
-                    }
+                    val ver = h.antigravityVersion ?: "active"
+                    "Official Antigravity CLI ($ver) at ${h.antigravityPath ?: "agy"}"
                 } else {
                     "Antigravity CLI (agy) not found in Linux environment"
                 }
                 addTierCard("Antigravity CLI Runtime", h.antigravityInstalled, agyDesc)
-                val adcExists = java.io.File(com.antigravity.pocketgravity.api.RuntimeManager.homeDir, ".config/gcloud/application_default_credentials.json").exists()
-                val tokenFile = com.antigravity.pocketgravity.api.RuntimeManager.agyTokenFile
-                val isAuth = h.authenticated || adcExists || tokenFile.exists()
-                val authDesc = when {
-                    adcExists -> "Authenticated via Google OAuth (ADC active)"
-                    h.authenticated || tokenFile.exists() -> "Authenticated (Token present)"
-                    else -> "Unauthenticated. Tap 'Sign in with Google' or paste an Antigravity OAuth Token below."
+
+                val isAuth = h.authenticated
+                val authDesc = if (isAuth) {
+                    "Authenticated with Google OAuth (${h.auth?.tokenFile ?: "Token active"})"
+                } else {
+                    "Unauthenticated. Tap 'Sign in with Google' or paste an Antigravity OAuth Token below."
                 }
                 addTierCard("Antigravity Authentication", isAuth, authDesc)
 
@@ -201,8 +210,10 @@ class DiagnosticsPanel(
                 cardsContainer.addView(actionRow)
                 addConsoleCard()
             }.onFailure { err ->
-                addTierCard("Embedded Bridge", false, "Bridge starting on http://127.0.0.1:8765 (${err.message ?: "Starting engine..."})")
-                
+                val standaloneReady = com.antigravity.pocketgravity.api.RuntimeManager.isStandaloneRuntimeReady()
+                addTierCard("Embedded PRoot Engine", standaloneReady, if (standaloneReady) "Standalone Runtime files ready" else "Initializing runtime assets...")
+                addTierCard("Bridge Daemon", false, "Bridge offline at ${bridgeClient.baseUrl} (${err.message ?: "Connection refused"})")
+
                 val helperBox = LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
                     setBackgroundResource(R.drawable.bg_rounded_card)
@@ -214,32 +225,43 @@ class DiagnosticsPanel(
                 }
 
                 val promptTitle = TextView(context).apply {
-                    text = "Start Embedded Engine"
+                    text = "⚡ Engine & Bridge Launcher"
                     setTextColor(Color.parseColor("#F1F5F9"))
-                    textSize = 13f
+                    textSize = 13.5f
                     typeface = Typeface.DEFAULT_BOLD
                 }
                 helperBox.addView(promptTitle)
 
                 val promptDesc = TextView(context).apply {
-                    text = "CLIFrontend runs completely standalone. Tap below to start or restart the embedded engine:"
+                    text = "Tap 'Start Engine' to launch the in-app standalone engine, or copy the Termux launcher command below:"
                     setTextColor(Color.parseColor("#94A3B8"))
                     textSize = 11.5f
-                    setPadding(0, 6, 0, 12)
+                    setPadding(0, 6, 0, 10)
                 }
                 helperBox.addView(promptDesc)
 
+                val cmdText = "bash /sdcard/Download/frontendcli/start.sh"
+                val codeBox = TextView(context).apply {
+                    text = cmdText
+                    setTextColor(Color.parseColor("#38BDF8"))
+                    typeface = Typeface.MONOSPACE
+                    textSize = 11.5f
+                    setPadding(16, 12, 16, 12)
+                    setBackgroundColor(Color.parseColor("#0F172A"))
+                }
+                helperBox.addView(codeBox)
+
                 val btnRow = LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
-                    setPadding(0, 8, 0, 0)
+                    setPadding(0, 12, 0, 0)
                 }
 
                 val startEngineBtn = Button(context).apply {
                     layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                        marginEnd = 8
+                        marginEnd = 4
                     }
-                    text = "🚀 Start Engine"
-                    textSize = 11.5f
+                    text = "🚀 Start"
+                    textSize = 11f
                     setTextColor(Color.WHITE)
                     setBackgroundResource(R.drawable.bg_chip)
                     setOnClickListener {
@@ -250,12 +272,55 @@ class DiagnosticsPanel(
                 }
                 btnRow.addView(startEngineBtn)
 
+                val copyBtn = Button(context).apply {
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        marginStart = 4
+                        marginEnd = 4
+                    }
+                    text = "📋 Copy"
+                    textSize = 11f
+                    setTextColor(Color.WHITE)
+                    setBackgroundResource(R.drawable.bg_chip)
+                    setOnClickListener {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("Termux Command", cmdText)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, "Command copied! Switch to Termux and paste.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                btnRow.addView(copyBtn)
+
+                val openTermuxBtn = Button(context).apply {
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        marginStart = 4
+                        marginEnd = 4
+                    }
+                    text = "📱 Termux"
+                    textSize = 11f
+                    setTextColor(Color.WHITE)
+                    setBackgroundResource(R.drawable.bg_chip)
+                    setOnClickListener {
+                        try {
+                            val intent = context.packageManager.getLaunchIntentForPackage("com.termux")
+                            if (intent != null) {
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(intent)
+                            } else {
+                                Toast.makeText(context, "Termux app not installed.", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Cannot open Termux: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                btnRow.addView(openTermuxBtn)
+
                 val retryBtn = Button(context).apply {
                     layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                        marginStart = 8
+                        marginStart = 4
                     }
                     text = "🔄 Refresh"
-                    textSize = 11.5f
+                    textSize = 11f
                     setTextColor(Color.WHITE)
                     setBackgroundResource(R.drawable.bg_chip)
                     setOnClickListener {

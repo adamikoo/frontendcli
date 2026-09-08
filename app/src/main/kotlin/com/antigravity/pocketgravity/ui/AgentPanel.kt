@@ -2,6 +2,7 @@ package com.antigravity.pocketgravity.ui
 
 import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.view.Gravity
@@ -587,12 +588,138 @@ class AgentPanel(
         pillModel.text = "$model ▾"
     }
 
+    private var setupCardView: View? = null
+
     fun showBridgeSetupCard(onRetry: () -> Unit) {
-        // Can optionally show banner or state
+        if (setupCardView != null) return
+
+        val termuxCmd = "bash /sdcard/Download/frontendcli/start.sh"
+
+        val card = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.bg_rounded_card)
+            setPadding(28, 24, 28, 24)
+            val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = 24
+            }
+            layoutParams = lp
+        }
+
+        val title = TextView(context).apply {
+            text = "⚡ Engine & Bridge Offline"
+            setTextColor(Color.parseColor("#F1F5F9"))
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        card.addView(title)
+
+        val desc = TextView(context).apply {
+            text = "Tap 'Start Engine' to launch the in-app standalone engine, or copy the Termux launcher command below:"
+            setTextColor(Color.parseColor("#94A3B8"))
+            textSize = 12f
+            setPadding(0, 8, 0, 12)
+        }
+        card.addView(desc)
+
+        val codeBox = TextView(context).apply {
+            text = termuxCmd
+            setTextColor(Color.parseColor("#38BDF8"))
+            typeface = Typeface.MONOSPACE
+            textSize = 12f
+            setPadding(20, 16, 20, 16)
+            setBackgroundColor(Color.parseColor("#0F172A"))
+        }
+        card.addView(codeBox)
+
+        val btnRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 14, 0, 0)
+        }
+
+        val startEngineBtn = Button(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = 4
+            }
+            text = "🚀 Start"
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            setBackgroundResource(R.drawable.bg_chip)
+            setOnClickListener {
+                com.antigravity.pocketgravity.api.BridgeService.start(context)
+                Toast.makeText(context, "Starting standalone engine...", Toast.LENGTH_SHORT).show()
+                postDelayed({ onRetry() }, 1500)
+            }
+        }
+        btnRow.addView(startEngineBtn)
+
+        val copyBtn = Button(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = 4
+                marginEnd = 4
+            }
+            text = "📋 Copy"
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            setBackgroundResource(R.drawable.bg_chip)
+            setOnClickListener {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                val clip = android.content.ClipData.newPlainText("Termux Command", termuxCmd)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(context, "Command copied! Switch to Termux and paste.", Toast.LENGTH_SHORT).show()
+            }
+        }
+        btnRow.addView(copyBtn)
+
+        val openTermuxBtn = Button(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = 4
+                marginEnd = 4
+            }
+            text = "📱 Termux"
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            setBackgroundResource(R.drawable.bg_chip)
+            setOnClickListener {
+                try {
+                    val intent = context.packageManager.getLaunchIntentForPackage("com.termux")
+                    if (intent != null) {
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                    } else {
+                        Toast.makeText(context, "Termux app not installed.", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Cannot open Termux: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        btnRow.addView(openTermuxBtn)
+
+        val retryBtn = Button(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = 4
+            }
+            text = "🔄 Retry"
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            setBackgroundResource(R.drawable.bg_chip)
+            setOnClickListener {
+                onRetry()
+            }
+        }
+        btnRow.addView(retryBtn)
+
+        card.addView(btnRow)
+
+        setupCardView = card
+        messagesContainer.addView(card, 0)
     }
 
     fun hideBridgeSetupCard() {
-        // Can optionally hide banner or state
+        setupCardView?.let {
+            messagesContainer.removeView(it)
+            setupCardView = null
+        }
     }
 
     private fun scrollToBottom() {
