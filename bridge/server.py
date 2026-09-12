@@ -248,6 +248,107 @@ class BridgeHandler(BaseHTTPRequestHandler):
             elif path == "/api/workspace":
                 self.send_json({"workspace": current_workspace})
 
+            elif path == "/api/mcps":
+                mcp_file = os.path.expanduser("~/.gemini/antigravity-cli/mcp_config.json")
+                if os.path.exists(mcp_file):
+                    try:
+                        with open(mcp_file, "r", encoding="utf-8") as f:
+                            self.send_json(json.load(f))
+                            return
+                    except Exception:
+                        pass
+                self.send_json({
+                    "mcpServers": {
+                        "chrome-devtools-plugin": {
+                            "command": "npx",
+                            "args": ["-y", "chrome-devtools-mcp@latest"],
+                            "enabled": True
+                        },
+                        "graphify": {
+                            "command": "graphify",
+                            "args": ["serve"],
+                            "enabled": True
+                        }
+                    }
+                })
+
+            elif path == "/api/customizations":
+                skills = []
+                skill_dirs = [
+                    os.path.expanduser("~/.gemini/config/skills"),
+                    os.path.expanduser("~/.agents/skills"),
+                    os.path.join(current_workspace, ".agents/skills")
+                ]
+                for sd in skill_dirs:
+                    if os.path.isdir(sd):
+                        for name in os.listdir(sd):
+                            p = os.path.join(sd, name)
+                            if os.path.isdir(p):
+                                skills.append({
+                                    "name": name,
+                                    "path": p,
+                                    "has_spec": os.path.exists(os.path.join(p, "SKILL.md"))
+                                })
+                if not skills:
+                    for b in ["caveman", "a11y-architect", "tdd-guide", "seo", "security-reviewer", "graphify-windows"]:
+                        skills.append({"name": b, "path": f"builtin/{b}", "has_spec": True})
+
+                workflows = []
+                wf_dirs = [
+                    os.path.expanduser("~/.gemini/config/global_workflows"),
+                    os.path.expanduser("~/.gemini/workflows"),
+                    os.path.join(current_workspace, "workflows")
+                ]
+                for wd in wf_dirs:
+                    if os.path.isdir(wd):
+                        for name in os.listdir(wd):
+                            if name.endswith(".md"):
+                                workflows.append({
+                                    "name": os.path.splitext(name)[0],
+                                    "path": os.path.join(wd, name)
+                                })
+                if not workflows:
+                    workflows = [
+                        {"name": "ftp-upload", "command": "/ftp-upload"},
+                        {"name": "sales-automator", "command": "/sales-automator"},
+                        {"name": "goal", "command": "/goal"},
+                        {"name": "grill-me", "command": "/grill-me"}
+                    ]
+
+                settings = get_settings()
+                rules = [
+                    {"name": "caveman", "description": "Ultra-compressed communication mode. Cuts token usage ~75%", "enabled": settings.get("rule_caveman", True)}
+                ]
+                gemini_md = os.path.join(current_workspace, "GEMINI.md")
+                if os.path.exists(gemini_md):
+                    rules.append({"name": "GEMINI.md (Workspace Rule)", "description": "Workspace-level rules and guidelines", "enabled": True})
+
+                self.send_json({"skills": skills, "workflows": workflows, "rules": rules})
+
+            elif path == "/api/limits":
+                settings = get_settings()
+                self.send_json({
+                    "tier": settings.get("tier", "FREE"),
+                    "credit_overcharge": settings.get("credit_overcharge", False),
+                    "limits": {
+                        "requests_per_day": 1500,
+                        "requests_remaining": settings.get("requests_remaining", 1340),
+                        "tokens_per_minute": 1000000,
+                        "tokens_remaining": settings.get("tokens_remaining", 948200)
+                    }
+                })
+
+            elif path == "/api/browser/settings":
+                settings = get_settings()
+                browser = settings.get("browser", {
+                    "enable_browser_tools": True,
+                    "javascript_policy": "Request Review",
+                    "enable_notifications": True,
+                    "enable_sounds": False,
+                    "actuation_rules": ["*"]
+                })
+                self.send_json(browser)
+
             elif path == "/api/fs/tree":
                 target = query.get("path", [current_workspace])[0]
                 target = os.path.abspath(target)
@@ -593,8 +694,79 @@ class BridgeHandler(BaseHTTPRequestHandler):
             else:
                 self.send_json({"status": "no_active_agent"})
 
+        elif path == "/api/mcps":
+            try:
+                mcp_file = os.path.expanduser("~/.gemini/antigravity-cli/mcp_config.json")
+                os.makedirs(os.path.dirname(mcp_file), exist_ok=True)
+                with open(mcp_file, "w", encoding="utf-8") as f:
+                    json.dump(payload, f, indent=2)
+                self.send_json({"status": "ok"})
+            except Exception as e:
+                self.send_json({"error": str(e)}, 500)
+
+        elif path == "/api/customizations":
+            try:
+                rule_name = payload.get("name")
+                enabled = payload.get("enabled", True)
+                settings = get_settings()
+                settings[f"rule_{rule_name}"] = enabled
+                save_settings(settings)
+                self.send_json({"status": "ok"})
+            except Exception as e:
+                self.send_json({"error": str(e)}, 500)
+
+        elif path == "/api/limits":
+            try:
+                settings = get_settings()
+                if "credit_overcharge" in payload:
+                    settings["credit_overcharge"] = bool(payload["credit_overcharge"])
+                save_settings(settings)
+                self.send_json({"status": "ok"})
+            except Exception as e:
+                self.send_json({"error": str(e)}, 500)
+
+        elif path == "/api/browser/settings":
+            try:
+                settings = get_settings()
+                settings["browser"] = payload
+                save_settings(settings)
+                self.send_json({"status": "ok"})
+            except Exception as e:
+                self.send_json({"error": str(e)}, 500)
+
+        elif path == "/api/upload/image":
+            try:
+                filename = payload.get("filename", f"image_{int(time.time()*1000)}.png")
+                b64_data = payload.get("data", "")
+                if not b64_data:
+                    self.send_json({"error": "Missing base64 data"}, 400)
+                    return
+                if "," in b64_data:
+                    b64_data = b64_data.split(",", 1)[1]
+                img_bytes = base64.b64decode(b64_data)
+
+                attach_dir = os.path.join(current_workspace, ".gemini", "attachments")
+                os.makedirs(attach_dir, exist_ok=True)
+                clean_name = re.sub(r"[^a-zA-Z0-9._-]", "_", filename)
+                target_file = os.path.join(attach_dir, f"{int(time.time()*1000)}_{clean_name}")
+                with open(target_file, "wb") as f:
+                    f.write(img_bytes)
+
+                rel_path = os.path.relpath(target_file, current_workspace).replace("\\", "/")
+                self.send_json({
+                    "status": "ok",
+                    "path": rel_path,
+                    "abs_path": target_file,
+                    "size": len(img_bytes)
+                })
+            except Exception as e:
+                self.send_json({"error": str(e)}, 500)
+
         elif path == "/api/agent/stream":
             prompt = payload.get("prompt", "")
+            images = payload.get("images", [])
+            if images:
+                prompt = f"[Attached Media: {', '.join(images)}]\n\n{prompt}"
             model = payload.get("model")
             effort = payload.get("effort")
             conversation_id = payload.get("conversation_id")

@@ -40,7 +40,7 @@ Before transitioning to a 100% standalone APK, the working prototype of CLIFront
 ```
 
 ---
-
+ 
 ## 2. Component Breakdown
 
 ### A. The Android Frontend (`app/`)

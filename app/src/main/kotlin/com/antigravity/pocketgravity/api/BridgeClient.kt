@@ -132,7 +132,7 @@ class BridgeClient(private val context: Context? = null) {
         }
     }
 
-    fun getFiles(path: String, includeHidden: Boolean = false, callback: (Result<List<FileItem>>) -> Unit) {
+    fun getFiles(path: String = "", includeHidden: Boolean = false, callback: (Result<List<FileItem>>) -> Unit) {
         executor.execute {
             try {
                 val enc = java.net.URLEncoder.encode(path, "UTF-8")
@@ -361,6 +361,7 @@ class BridgeClient(private val context: Context? = null) {
         prompt: String,
         model: String? = null,
         effort: String? = null,
+        images: List<String>? = null,
         onEvent: (JSONObject) -> Unit,
         onComplete: (Int) -> Unit,
         onError: (String) -> Unit
@@ -379,6 +380,11 @@ class BridgeClient(private val context: Context? = null) {
                     put("prompt", prompt)
                     if (!model.isNullOrEmpty()) put("model", model)
                     if (!effort.isNullOrEmpty()) put("effort", effort)
+                    if (!images.isNullOrEmpty()) {
+                        val arr = org.json.JSONArray()
+                        images.forEach { arr.put(it) }
+                        put("images", arr)
+                    }
                     put("dangerously_skip_permissions", true)
                 }.toString()
 
@@ -539,6 +545,225 @@ class BridgeClient(private val context: Context? = null) {
                 }
             } catch (e: Exception) {
                 runOnMain(callback, Result.failure(e))
+            }
+        }
+    }
+
+    fun getMcps(callback: (Result<JSONObject>) -> Unit) {
+        executor.execute {
+            try {
+                val url = URL("$baseUrl/api/mcps")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                if (conn.responseCode == 200) {
+                    val body = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8")).readText()
+                    runOnMain(callback, Result.success(JSONObject(body)))
+                } else {
+                    runOnMain(callback, Result.failure(Exception("HTTP ${conn.responseCode}")))
+                }
+            } catch (e: Exception) {
+                runOnMain(callback, Result.failure(e))
+            }
+        }
+    }
+
+    fun saveMcps(payload: JSONObject, callback: (Boolean) -> Unit) {
+        executor.execute {
+            try {
+                val url = URL("$baseUrl/api/mcps")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+                val ok = conn.responseCode in 200..299
+                runOnMain(callback, ok)
+            } catch (_: Exception) {
+                runOnMain(callback, false)
+            }
+        }
+    }
+
+    fun getCustomizations(callback: (Result<JSONObject>) -> Unit) {
+        executor.execute {
+            try {
+                val url = URL("$baseUrl/api/customizations")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                if (conn.responseCode == 200) {
+                    val body = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8")).readText()
+                    runOnMain(callback, Result.success(JSONObject(body)))
+                } else {
+                    runOnMain(callback, Result.failure(Exception("HTTP ${conn.responseCode}")))
+                }
+            } catch (e: Exception) {
+                runOnMain(callback, Result.failure(e))
+            }
+        }
+    }
+
+    fun saveCustomization(name: String, enabled: Boolean, callback: (Boolean) -> Unit) {
+        executor.execute {
+            try {
+                val url = URL("$baseUrl/api/customizations")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                val payload = JSONObject().put("name", name).put("enabled", enabled).toString()
+                OutputStreamWriter(conn.outputStream).use { it.write(payload) }
+                runOnMain(callback, conn.responseCode in 200..299)
+            } catch (_: Exception) {
+                runOnMain(callback, false)
+            }
+        }
+    }
+
+    fun getLimits(callback: (Result<JSONObject>) -> Unit) {
+        executor.execute {
+            try {
+                val url = URL("$baseUrl/api/limits")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                if (conn.responseCode == 200) {
+                    val body = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8")).readText()
+                    runOnMain(callback, Result.success(JSONObject(body)))
+                } else {
+                    runOnMain(callback, Result.failure(Exception("HTTP ${conn.responseCode}")))
+                }
+            } catch (e: Exception) {
+                runOnMain(callback, Result.failure(e))
+            }
+        }
+    }
+
+    fun setCreditOvercharge(enabled: Boolean, callback: (Boolean) -> Unit) {
+        executor.execute {
+            try {
+                val url = URL("$baseUrl/api/limits")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                val payload = JSONObject().put("credit_overcharge", enabled).toString()
+                OutputStreamWriter(conn.outputStream).use { it.write(payload) }
+                runOnMain(callback, conn.responseCode in 200..299)
+            } catch (_: Exception) {
+                runOnMain(callback, false)
+            }
+        }
+    }
+
+    fun getBrowserSettings(callback: (Result<JSONObject>) -> Unit) {
+        executor.execute {
+            try {
+                val url = URL("$baseUrl/api/browser/settings")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                if (conn.responseCode == 200) {
+                    val body = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8")).readText()
+                    runOnMain(callback, Result.success(JSONObject(body)))
+                } else {
+                    runOnMain(callback, Result.failure(Exception("HTTP ${conn.responseCode}")))
+                }
+            } catch (e: Exception) {
+                runOnMain(callback, Result.failure(e))
+            }
+        }
+    }
+
+    fun saveBrowserSettings(payload: JSONObject, callback: (Boolean) -> Unit) {
+        executor.execute {
+            try {
+                val url = URL("$baseUrl/api/browser/settings")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+                runOnMain(callback, conn.responseCode in 200..299)
+            } catch (_: Exception) {
+                runOnMain(callback, false)
+            }
+        }
+    }
+
+    fun uploadImage(filename: String, base64: String, callback: (Result<JSONObject>) -> Unit) {
+        executor.execute {
+            try {
+                val url = URL("$baseUrl/api/upload/image")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 15000
+                conn.readTimeout = 15000
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                val payload = JSONObject().put("filename", filename).put("data", base64).toString()
+                OutputStreamWriter(conn.outputStream).use { it.write(payload) }
+                if (conn.responseCode == 200) {
+                    val body = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8")).readText()
+                    runOnMain(callback, Result.success(JSONObject(body)))
+                } else {
+                    runOnMain(callback, Result.failure(Exception("HTTP ${conn.responseCode}")))
+                }
+            } catch (e: Exception) {
+                runOnMain(callback, Result.failure(e))
+            }
+        }
+    }
+
+    fun getWorkspace(callback: (Result<String>) -> Unit) {
+        executor.execute {
+            try {
+                val url = URL("$baseUrl/api/workspace")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                if (conn.responseCode == 200) {
+                    val body = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8")).readText()
+                    val wk = JSONObject(body).optString("workspace", "/workspace")
+                    runOnMain(callback, Result.success(wk))
+                } else {
+                    runOnMain(callback, Result.failure(Exception("HTTP ${conn.responseCode}")))
+                }
+            } catch (e: Exception) {
+                runOnMain(callback, Result.failure(e))
+            }
+        }
+    }
+
+    fun setWorkspace(path: String, callback: (Boolean) -> Unit) {
+        executor.execute {
+            try {
+                val url = URL("$baseUrl/api/workspace")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                val payload = JSONObject().put("workspace", path).toString()
+                OutputStreamWriter(conn.outputStream).use { it.write(payload) }
+                runOnMain(callback, conn.responseCode in 200..299)
+            } catch (_: Exception) {
+                runOnMain(callback, false)
             }
         }
     }

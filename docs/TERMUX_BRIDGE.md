@@ -1,38 +1,90 @@
 # Termux Bridge Implementation & Integration
 
-## 1. Environment Detection Strategy
+## 1. Overview
 
-The Android application determines environment state across five tiers:
-
-| Tier | Detection Mechanism | Status Indicator |
-|---|---|---|
-| **1. Termux** | Intent package check (`com.termux`) & filesystem check (`/data/data/com.termux`) | Termux Installed / Missing |
-| **2. Ubuntu PRoot** | Path check for container rootfs & distro configuration | Ubuntu Container Found / Missing |
-| **3. Antigravity CLI** | Check for `/root/.local/bin/agy` or `agy` in PATH | Binary Detected (`v1.1.27`) |
-| **4. Authentication** | Presence & validity of `~/.gemini/antigravity-cli/antigravity-oauth-token` | Authenticated / Login Required |
-| **5. Bridge Service** | HTTP health probe to `http://127.0.0.1:8765/api/health` | Connected / Offline |
+The Termux Bridge provides a local HTTP and SSE daemon running on `127.0.0.1:8765` inside Termux or Ubuntu PRoot. It bridges the native Android app UI directly to the official Google Antigravity CLI (`agy`) binary.
 
 ---
 
-## 2. Zero-Setup Experience
+## 2. One-Command Setup & Launch
 
-1. **Already Running**:
-   If the bridge daemon is active in Ubuntu, the app detects it within 100ms, skips all setup screens, and opens the active project workspace immediately.
+Inside Termux, execute:
 
-2. **First Run or Cold Start**:
-   - The app detects whether Termux is installed.
-   - If Termux is installed but the bridge is not yet active, the app presents a one-tap "Start Bridge in Termux" button that sends an Intent to Termux or copies the minimal command:
-     ```bash
-     proot-distro login ubuntu -- /downloads/clifrontend/bridge/start.sh
-     ```
-   - We also provide an auto-starting service script for Termux's `~/.bashrc` or `~/.termux/boot/` so that whenever Termux starts, the bridge daemon is automatically ready.
+```bash
+pkg install -y python curl && curl -sL https://raw.githubusercontent.com/adamikoo/frontendcli/main/bridge/start.sh -o ~/start.sh && bash ~/start.sh
+```
+
+Or, if the app has already exported the scripts to storage:
+```bash
+termux-setup-storage
+bash /sdcard/Download/frontendcli/start.sh
+```
 
 ---
 
-## 3. Bridge Process Details
+## 3. Bridge Management Commands
 
-The bridge daemon (`bridge/server.py`) is written in standard Python 3 (available in both Ubuntu and Termux):
-- Uses standard library `http.server` and lightweight async WebSocket protocol.
-- Handles pseudo-terminal allocation (`pty.fork()` or `openpty()`) for genuine interactive shell execution.
-- Bridges stdin/stdout/stderr for `agy` sessions with `--input-format stream-json --output-format stream-json`.
-- Exposes clean REST endpoints for file browsing, reading, saving, and Git diff generation.
+The `start.sh` script accepts standard lifecycle commands:
+
+| Command | Action |
+|---|---|
+| `bash ~/start.sh start` | Starts the bridge daemon in background |
+| `bash ~/start.sh stop` | Gracefully stops the bridge daemon |
+| `bash ~/start.sh restart` | Restarts the bridge daemon |
+| `bash ~/start.sh status` | Checks PID, port 8765 health, and prints recent logs |
+
+---
+
+## 4. Automatic Startup on Termux Launch
+
+To make the bridge start automatically whenever you open Termux:
+
+Add the following line to `~/.bashrc`:
+```bash
+if [ -f "$HOME/start.sh" ]; then
+    bash "$HOME/start.sh" start >/dev/null 2>&1
+fi
+```
+
+Or configure Termux:Boot (`~/.termux/boot/start-bridge.sh`):
+```bash
+#!/data/data/com.termux/files/usr/bin/sh
+termux-wake-lock
+bash /data/data/com.termux/files/home/start.sh start
+```
+
+---
+
+## 5. Log Files & Diagnostics
+
+- **Log File**: `~/.frontendcli/bridge.log`
+- **PID File**: `~/.frontendcli/bridge.pid`
+- **Health Check Probe**:
+  ```bash
+  curl http://127.0.0.1:8765/api/health
+  ```
+  Expected output:
+  ```json
+  {
+    "status": "ok",
+    "termux": true,
+    "ubuntu": true,
+    "antigravity": {
+      "installed": true,
+      "version": "1.1.27",
+      "path": "/root/.local/bin/agy"
+    },
+    "auth": {
+      "authenticated": true
+    },
+    "workspace": "/root"
+  }
+  ```
+
+---
+
+## 6. How the Android App Connects
+
+1. When CLIFrontend launches, `BridgeClient` probes `http://127.0.0.1:8765/api/health`.
+2. Once the 200 OK response is received, the app transitions seamlessly to the IDE workspace.
+3. If the bridge is not yet running, the **Diagnostics** panel provides a 1-tap "Copy Termux Command" and "Open Termux" button to quickly launch the daemon.

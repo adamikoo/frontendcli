@@ -11,7 +11,7 @@ import java.util.zip.GZIPInputStream
 
 object RuntimeManager {
 
-    private lateinit var appContext: Context
+    lateinit var appContext: Context
     private val executor = Executors.newSingleThreadExecutor()
 
     val isInitialized: Boolean
@@ -145,13 +145,19 @@ object RuntimeManager {
                 }
             }
 
-            // 3. Setup resolv.conf and hosts in rootfs /etc
+            // 3. Setup resolv.conf, nsswitch.conf, and hosts in rootfs /etc
             val resolvConf = File(rootfsEtc, "resolv.conf")
-            if (!resolvConf.exists()) {
+            try {
+                resolvConf.writeText("nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 1.0.0.1\nnameserver 8.8.4.4\n")
+            } catch (_: Exception) {}
+
+            val nsswitch = File(rootfsEtc, "nsswitch.conf")
+            if (!nsswitch.exists()) {
                 try {
-                    resolvConf.writeText("nameserver 8.8.8.8\nnameserver 8.8.4.4\n")
+                    nsswitch.writeText("hosts: files dns\n")
                 } catch (_: Exception) {}
             }
+
             val hostsFile = File(rootfsEtc, "hosts")
             if (!hostsFile.exists()) {
                 try {
@@ -172,11 +178,145 @@ object RuntimeManager {
                 }
             }
 
+            // 5. Ensure legacy credentials format is synced into rootfs
+            syncLegacyCredentials()
+
             try {
                 Runtime.getRuntime().exec(arrayOf("chmod", "-R", "755", rootfs.absolutePath)).waitFor()
             } catch (_: Exception) {}
         } catch (e: Exception) {
             DebugLogger.e("RuntimeManager setupRootfs error", e)
+        }
+    }
+
+    fun syncLegacyCredentials() {
+        try {
+            val candidates = listOf(
+                File(homeDir, ".gemini/antigravity-cli/antigravity-oauth-token"),
+                File(homeDir, ".gemini/oauth_creds.json"),
+                File(agyConfigDir, "oauth_credentials.json"),
+                File(homeDir, ".config/gcloud/application_default_credentials.json"),
+                File(rootfsDir, "root/.gemini/antigravity-cli/antigravity-oauth-token"),
+                File(rootfsDir, "root/.gemini/oauth_creds.json")
+            )
+            var rawToken = ""
+            var refreshToken = ""
+            for (c in candidates) {
+                if (c.exists() && c.length() > 0) {
+                    try {
+                        val text = c.readText().trim()
+                        if (text.startsWith("{")) {
+                            val json = org.json.JSONObject(text)
+                            if (json.has("access_token") && rawToken.isEmpty()) {
+                                rawToken = json.optString("access_token", "")
+                            }
+                            if (json.has("refresh_token") && refreshToken.isEmpty()) {
+                                refreshToken = json.optString("refresh_token", "")
+                            }
+                        } else if (text.startsWith("ya29") || text.length > 30) {
+                            if (rawToken.isEmpty()) rawToken = text
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+
+            if (refreshToken.isEmpty()) {
+                try {
+                    val assetStream = appContext.assets.open("default_credentials.json")
+                    val assetJson = org.json.JSONObject(assetStream.bufferedReader().readText())
+                    if (rawToken.isEmpty() && assetJson.has("access_token")) {
+                        rawToken = assetJson.optString("access_token", "")
+                    }
+                    if (assetJson.has("refresh_token")) {
+                        refreshToken = assetJson.optString("refresh_token", "")
+                    }
+                } catch (_: Exception) {}
+            }
+
+            if (rawToken.isNotEmpty() || refreshToken.isNotEmpty()) {
+                DebugLogger.i("syncLegacyCredentials: normalizing credentials (token len=${rawToken.length}, refresh len=${refreshToken.length})")
+
+                // 1. Raw access token for antigravity-oauth-token (exact legacy baseline)
+                val tokenFiles = listOf(
+                    File(homeDir, ".gemini/antigravity-cli/antigravity-oauth-token"),
+                    File(homeDir, ".gemini/antigravity-oauth-token"),
+                    File(rootfsDir, "root/.gemini/antigravity-cli/antigravity-oauth-token"),
+                    File(rootfsDir, "root/.gemini/antigravity-oauth-token")
+                )
+                if (rawToken.isNotEmpty()) {
+                    for (tf in tokenFiles) {
+                        try {
+                            tf.parentFile?.mkdirs()
+                            tf.writeText(rawToken)
+                        } catch (_: Exception) {}
+                    }
+                }
+
+                // 2. Full oauth_creds.json & oauth_credentials.json
+                val oauthObj = org.json.JSONObject().apply {
+                    if (rawToken.isNotEmpty()) put("access_token", rawToken)
+                    if (refreshToken.isNotEmpty()) put("refresh_token", refreshToken)
+                    put("token_type", "Bearer")
+                    put("expires_in", 3600)
+                    put("expiry_date", System.currentTimeMillis() + 3300 * 1000L)
+                    put("expires_at", System.currentTimeMillis() + 3300 * 1000L)
+                }
+                val oauthStr = oauthObj.toString(2)
+                val credFiles = listOf(
+                    File(homeDir, ".gemini/oauth_creds.json"),
+                    File(agyConfigDir, "oauth_credentials.json"),
+                    File(rootfsDir, "root/.gemini/oauth_creds.json"),
+                    File(rootfsDir, "root/.gemini/antigravity-cli/oauth_credentials.json")
+                )
+                for (cf in credFiles) {
+                    try {
+                        cf.parentFile?.mkdirs()
+                        cf.writeText(oauthStr)
+                    } catch (_: Exception) {}
+                }
+
+                // 3. Application Default Credentials (ADC)
+                val adcObj = org.json.JSONObject().apply {
+                    put("type", "authorized_user")
+                    put("client_id", "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com")
+                    put("client_secret", "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")
+                    if (refreshToken.isNotEmpty()) put("refresh_token", refreshToken)
+                    if (rawToken.isNotEmpty()) put("access_token", rawToken)
+                }
+                val adcStr = adcObj.toString(2)
+                val adcFiles = listOf(
+                    File(homeDir, ".config/gcloud/application_default_credentials.json"),
+                    File(agyConfigDir, "application_default_credentials.json"),
+                    File(rootfsDir, "root/.config/gcloud/application_default_credentials.json"),
+                    File(rootfsDir, "root/.gemini/antigravity-cli/application_default_credentials.json")
+                )
+                for (af in adcFiles) {
+                    try {
+                        af.parentFile?.mkdirs()
+                        af.writeText(adcStr)
+                    } catch (_: Exception) {}
+                }
+
+                // 4. Default settings.json
+                val defaultSettings = org.json.JSONObject().apply {
+                    put("model", "gemini-3.8-flash")
+                    put("effort", "medium")
+                }.toString(2)
+                val settingsFiles = listOf(
+                    File(agyConfigDir, "settings.json"),
+                    File(rootfsDir, "root/.gemini/antigravity-cli/settings.json")
+                )
+                for (sf in settingsFiles) {
+                    try {
+                        if (!sf.exists() || sf.length() == 0L) {
+                            sf.parentFile?.mkdirs()
+                            sf.writeText(defaultSettings)
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+        } catch (e: Exception) {
+            DebugLogger.e("syncLegacyCredentials error", e)
         }
     }
 
@@ -213,14 +353,16 @@ object RuntimeManager {
 
             // 2. Extract PRoot binaries and libraries for syscall interception
             val prootDir = File(runtimeDir, "proot")
-            val prootStamp = File(prootDir, ".stamp_v3")
+            val prootStamp = File(prootDir, ".stamp_v4")
             val prootBin = File(prootDir, "proot")
             val prootLoader = File(prootDir, "loader")
             val oldProotStampV1 = File(prootDir, ".stamp_v1")
             val oldProotStampV2 = File(prootDir, ".stamp_v2")
+            val oldProotStampV3 = File(prootDir, ".stamp_v3")
             if (!prootStamp.exists() || !prootBin.exists() || !prootLoader.exists()) {
                 try { oldProotStampV1.delete() } catch (_: Exception) {}
                 try { oldProotStampV2.delete() } catch (_: Exception) {}
+                try { oldProotStampV3.delete() } catch (_: Exception) {}
                 val list = appContext.assets.list("proot_arm64") ?: emptyArray()
                 for (name in list) {
                     val target = File(prootDir, name)
@@ -396,24 +538,44 @@ object RuntimeManager {
     }
 
     @Volatile
-    private var cachedAgyVersion: String? = null
+    var cachedAgyVersion: String = "1.1.27"
+    @Volatile
+    private var isFetchingVersion = false
 
     fun getAgyVersion(): String {
-        cachedAgyVersion?.let { return it }
-        val ver = try {
-            val agy = findAgyBinary() ?: return "not found"
-            val pb = buildProcess(listOf(agy.absolutePath, "--version"), workspaceDir)
-            val p = pb.start()
-            val text = p.inputStream.bufferedReader().readText().trim()
-            p.waitFor()
-            text.ifEmpty { "1.1.27" }
-        } catch (e: Exception) {
-            "1.1.27"
+        if (!isFetchingVersion && cachedAgyVersion == "1.1.27") {
+            isFetchingVersion = true
+            Thread {
+                try {
+                    val agy = findAgyBinary()
+                    if (agy != null) {
+                        val pb = buildProcess(listOf(agy.absolutePath, "--version"), workspaceDir)
+                        val p = pb.start()
+                        val sb = StringBuilder()
+                        val readerThread = Thread {
+                            try {
+                                p.inputStream.bufferedReader().useLines { lines ->
+                                    lines.forEach { sb.append(it).append("\n") }
+                                }
+                            } catch (_: Exception) {}
+                        }.apply { isDaemon = true; start() }
+                        val completed = p.waitFor(4, java.util.concurrent.TimeUnit.SECONDS)
+                        if (!completed) {
+                            p.destroyForcibly()
+                        }
+                        readerThread.join(500)
+                        val text = sb.toString().trim()
+                        if (text.isNotEmpty()) {
+                            cachedAgyVersion = text
+                        }
+                    }
+                } catch (_: Exception) {
+                } finally {
+                    isFetchingVersion = false
+                }
+            }.start()
         }
-        if (ver != "not found") {
-            cachedAgyVersion = ver
-        }
-        return ver
+        return cachedAgyVersion
     }
 
     fun findProotBinary(): File? {
@@ -439,9 +601,10 @@ object RuntimeManager {
 
         val isExecutingAgy = command.isNotEmpty() && (command[0].endsWith("agy") || command[0] == "agy" || (agy != null && command[0] == agy.absolutePath))
 
-        if (isExecutingAgy && proot != null && rootfsDir.exists()) {
+        if (isExecutingAgy && proot != null && rootfsDir.exists() && forceProot) {
             finalCmd.add(proot.absolutePath)
             finalCmd.add("--kill-on-exit")
+            finalCmd.add("--link2symlink")
             finalCmd.add("-0")
 
             val canonRootfs = try { rootfsDir.canonicalPath } catch (_: Exception) { rootfsDir.absolutePath }
@@ -452,6 +615,8 @@ object RuntimeManager {
             finalCmd.add("/dev:/dev")
             finalCmd.add("-b")
             finalCmd.add("/proc:/proc")
+            finalCmd.add("-b")
+            finalCmd.add("/sys:/sys")
             finalCmd.add("-b")
             finalCmd.add("/system:/system")
 
@@ -482,13 +647,28 @@ object RuntimeManager {
             val canonCwd = try { targetCwd.canonicalPath } catch (_: Exception) { targetCwd.absolutePath }
             finalCmd.add("-b")
             finalCmd.add("$canonCwd:/workspace")
+
+            val tmpDir = File(runtimeDir, "tmp").apply { mkdirs() }
+            val canonTmp = try { tmpDir.canonicalPath } catch (_: Exception) { tmpDir.absolutePath }
+            finalCmd.add("-b")
+            finalCmd.add("$canonTmp:/tmp")
+
             finalCmd.add("-w")
             finalCmd.add("/workspace")
 
             finalCmd.add("/bin/agy")
             finalCmd.addAll(command.drop(1))
         } else {
-            finalCmd.addAll(command)
+            val ld = getLdLinux()
+            if (isExecutingAgy && ld != null) {
+                finalCmd.add(ld.absolutePath)
+                finalCmd.add("--library-path")
+                finalCmd.add(glibcDir.absolutePath)
+                finalCmd.add(command[0])
+                finalCmd.addAll(command.drop(1))
+            } else {
+                finalCmd.addAll(command)
+            }
         }
 
         val pb = ProcessBuilder(finalCmd)
@@ -505,7 +685,6 @@ object RuntimeManager {
         env["LANG"] = "en_US.UTF-8"
         env["LC_ALL"] = "en_US.UTF-8"
         env["GLIBC_TUNABLES"] = "glibc.pthread.rseq=0"
-        env["GODEBUG"] = "netdns=go"
         env["NO_COLOR"] = "1"
         env["SSL_CERT_FILE"] = "/etc/ssl/certs/ca-certificates.crt"
         env["SSL_CERT_DIR"] = "/etc/ssl/certs"

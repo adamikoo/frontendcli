@@ -23,6 +23,17 @@ class BridgeServer(val port: Int = 8765) {
         isRunning = true
         executor.execute {
             try {
+                // Check if external bridge (e.g. Termux server.py) is already serving port 8765
+                try {
+                    val probeSocket = Socket()
+                    probeSocket.connect(java.net.InetSocketAddress("127.0.0.1", port), 400)
+                    probeSocket.close()
+                    DebugLogger.i("External bridge detected on port $port (Termux/Ubuntu). Deferring to external bridge.")
+                    return@execute
+                } catch (_: Exception) {
+                    // Port is free
+                }
+
                 serverSocket = ServerSocket().apply {
                     reuseAddress = true
                     bind(java.net.InetSocketAddress("0.0.0.0", port), 50)
@@ -156,6 +167,15 @@ class BridgeServer(val port: Int = 8765) {
             method == "POST" && path == "/api/agent/stream" -> handleAgentStream(payload, output, socket)
             method == "POST" && path == "/api/debug/test-cli" -> handleDebugCliTest(payload, output)
             method == "GET" && path == "/api/debug/report" -> handleDebugReport(output)
+            method == "GET" && path == "/api/mcps" -> handleGetMcps(output)
+            method == "POST" && path == "/api/mcps" -> handleSaveMcps(payload, output)
+            method == "GET" && path == "/api/customizations" -> handleGetCustomizations(output)
+            method == "POST" && path == "/api/customizations" -> handleSaveCustomization(payload, output)
+            method == "GET" && path == "/api/limits" -> handleGetLimits(output)
+            method == "POST" && path == "/api/limits" -> handleSetLimits(payload, output)
+            method == "GET" && path == "/api/browser/settings" -> handleGetBrowserSettings(output)
+            method == "POST" && path == "/api/browser/settings" -> handleSetBrowserSettings(payload, output)
+            method == "POST" && path == "/api/upload/image" -> handleUploadImage(payload, output)
             else -> sendJson(output, JSONObject().put("error", "Endpoint not found"), 404)
         }
     }
@@ -348,7 +368,7 @@ class BridgeServer(val port: Int = 8765) {
         sendJson(output, JSONObject().put("status", "ok").put("model", model))
     }
 
-    fun getValidAccessToken(): String {
+    fun getValidAccessToken(forceRefresh: Boolean = false): String {
         val tokenFile = RuntimeManager.agyTokenFile
         var token = if (tokenFile.exists()) {
             val text = tokenFile.readText().trim()
@@ -358,48 +378,112 @@ class BridgeServer(val port: Int = 8765) {
                 text
             }
         } else ""
-        val credsFile = File(RuntimeManager.agyConfigDir, "oauth_credentials.json")
-        // Also check the primary agy credential file
-        val agyCredsFile = File(RuntimeManager.homeDir, ".gemini/oauth_creds.json")
-        val primaryCreds = if (credsFile.exists()) credsFile else if (agyCredsFile.exists()) agyCredsFile else null
-        if (primaryCreds != null && primaryCreds.exists()) {
-            try {
-                val json = JSONObject(primaryCreds.readText())
-                val refreshToken = json.optString("refresh_token")
-                // Support both expiry_date (agy format) and expires_at (legacy)
-                val expiresAt = if (json.has("expiry_date")) json.optLong("expiry_date", 0) else json.optLong("expires_at", 0)
-                if (refreshToken.isNotEmpty() && (token.isEmpty() || System.currentTimeMillis() > expiresAt)) {
-                    DebugLogger.i("Refreshing Google OAuth token...")
-                    val conn = java.net.URL("https://oauth2.googleapis.com/token").openConnection() as java.net.HttpURLConnection
-                    conn.requestMethod = "POST"
-                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-                    conn.doOutput = true
-                    val postData = "client_id=1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com" +
-                            "&client_secret=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" +
-                            "&refresh_token=" + java.net.URLEncoder.encode(refreshToken, "UTF-8") +
-                            "&grant_type=refresh_token"
-                    conn.outputStream.use { it.write(postData.toByteArray(Charsets.UTF_8)) }
-                    if (conn.responseCode in 200..299) {
-                        val respJson = JSONObject(conn.inputStream.bufferedReader().readText())
-                        val newAccessToken = respJson.optString("access_token")
-                        if (newAccessToken.isNotEmpty()) {
-                            token = newAccessToken
-                            tokenFile.parentFile?.mkdirs()
-                            tokenFile.writeText(token)
-                            json.put("access_token", newAccessToken)
-                            val expIn = respJson.optLong("expires_in", 3600)
-                            val newExpiry = System.currentTimeMillis() + (expIn - 300) * 1000
-                            json.put("expiry_date", newExpiry)
-                            json.remove("expires_at") // Remove legacy key
-                            // Write to all credential locations
-                            val updatedJson = json.toString(2)
-                            credsFile.parentFile?.mkdirs()
-                            credsFile.writeText(updatedJson)
-                            agyCredsFile.parentFile?.mkdirs()
-                            agyCredsFile.writeText(updatedJson)
-                            DebugLogger.i("Google OAuth token refreshed successfully!")
-                        }
+
+        val candidates = listOf(
+            File(RuntimeManager.agyConfigDir, "oauth_credentials.json"),
+            File(RuntimeManager.homeDir, ".gemini/oauth_creds.json"),
+            File(RuntimeManager.rootfsDir, "root/.gemini/oauth_creds.json"),
+            File(RuntimeManager.rootfsDir, "root/.gemini/antigravity-cli/oauth_credentials.json"),
+            File(RuntimeManager.homeDir, ".config/gcloud/application_default_credentials.json")
+        )
+
+        var refreshToken = ""
+        var expiresAt = 0L
+        var targetJson: JSONObject? = null
+
+        for (f in candidates) {
+            if (f.exists() && f.length() > 0) {
+                try {
+                    val j = JSONObject(f.readText().trim())
+                    val r = j.optString("refresh_token", "")
+                    if (r.isNotEmpty() && refreshToken.isEmpty()) {
+                        refreshToken = r
+                        targetJson = j
+                        expiresAt = if (j.has("expiry_date")) j.optLong("expiry_date", 0L) else j.optLong("expires_at", 0L)
                     }
+                } catch (_: Exception) {}
+            }
+        }
+
+        // Bundled asset fallback if refresh token not on disk
+        if (refreshToken.isEmpty()) {
+            try {
+                val assetStream = RuntimeManager.appContext.assets.open("default_credentials.json")
+                val assetJson = JSONObject(assetStream.bufferedReader().readText())
+                val r = assetJson.optString("refresh_token", "")
+                if (r.isNotEmpty()) {
+                    refreshToken = r
+                    targetJson = assetJson
+                    if (token.isEmpty()) {
+                        token = assetJson.optString("access_token", "")
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        val needsRefresh = forceRefresh || token.isEmpty() || token.length < 30 ||
+                (refreshToken.isNotEmpty() && (expiresAt == 0L || System.currentTimeMillis() >= (expiresAt - 300_000L)))
+
+        if (refreshToken.isNotEmpty() && needsRefresh) {
+            DebugLogger.i("Refreshing Google OAuth token (force=$forceRefresh, tokenLen=${token.length}, expiresAt=$expiresAt)...")
+            try {
+                val conn = java.net.URL("https://oauth2.googleapis.com/token").openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+                conn.doOutput = true
+                val postData = "client_id=1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com" +
+                        "&client_secret=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" +
+                        "&refresh_token=" + java.net.URLEncoder.encode(refreshToken, "UTF-8") +
+                        "&grant_type=refresh_token"
+                conn.outputStream.use { it.write(postData.toByteArray(Charsets.UTF_8)) }
+                if (conn.responseCode in 200..299) {
+                    val respJson = JSONObject(conn.inputStream.bufferedReader().readText())
+                    val newAccessToken = respJson.optString("access_token")
+                    if (newAccessToken.isNotEmpty()) {
+                        token = newAccessToken
+                        val expIn = respJson.optLong("expires_in", 3600)
+                        val newExpiry = System.currentTimeMillis() + expIn * 1000L
+
+                        val jsonToSave = (targetJson ?: JSONObject()).apply {
+                            put("access_token", newAccessToken)
+                            put("refresh_token", refreshToken)
+                            put("token_type", "Bearer")
+                            put("expires_in", expIn)
+                            put("expiry_date", newExpiry)
+                            put("expires_at", newExpiry)
+                        }
+                        val jsonStr = jsonToSave.toString(2)
+
+                        // 1. Write raw access token to ALL token files
+                        listOf(
+                            tokenFile,
+                            File(RuntimeManager.agyConfigDir, "antigravity-oauth-token"),
+                            File(RuntimeManager.homeDir, ".gemini/antigravity-cli/antigravity-oauth-token"),
+                            File(RuntimeManager.homeDir, ".gemini/antigravity-oauth-token"),
+                            File(RuntimeManager.rootfsDir, "root/.gemini/antigravity-cli/antigravity-oauth-token"),
+                            File(RuntimeManager.rootfsDir, "root/.gemini/antigravity-oauth-token")
+                        ).forEach { tf ->
+                            try {
+                                tf.parentFile?.mkdirs()
+                                tf.writeText(newAccessToken)
+                            } catch (_: Exception) {}
+                        }
+
+                        // 2. Write credential JSON to ALL credential stores
+                        candidates.forEach { cf ->
+                            try {
+                                cf.parentFile?.mkdirs()
+                                cf.writeText(jsonStr)
+                            } catch (_: Exception) {}
+                        }
+
+                        DebugLogger.i("Google OAuth token refreshed successfully! (new expiry: $newExpiry)")
+                    }
+                } else {
+                    val err = conn.errorStream?.bufferedReader()?.readText() ?: "HTTP ${conn.responseCode}"
+                    DebugLogger.e("Token refresh failed: $err")
                 }
             } catch (e: Exception) {
                 DebugLogger.e("Error refreshing token", e)
@@ -593,12 +677,13 @@ class BridgeServer(val port: Int = 8765) {
         val refreshToken = respJson.optString("refresh_token", "")
 
         // 1. Google Cloud Application Default Credentials (ADC) format
-        if (refreshToken.isNotEmpty()) {
+        if (refreshToken.isNotEmpty() || accessToken.isNotEmpty()) {
             val adcObj = JSONObject().apply {
                 put("type", "authorized_user")
                 put("client_id", "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com")
                 put("client_secret", "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")
-                put("refresh_token", refreshToken)
+                if (refreshToken.isNotEmpty()) put("refresh_token", refreshToken)
+                if (accessToken.isNotEmpty()) put("access_token", accessToken)
             }
             val adcTargets = listOf(
                 File(RuntimeManager.homeDir, ".config/gcloud/application_default_credentials.json"),
@@ -616,7 +701,22 @@ class BridgeServer(val port: Int = 8765) {
             }
         }
 
-        // 2. Prepare StoredToken JSON struct for agy keyring storage
+        // 2. Write raw accessToken to antigravity-oauth-token (legacy compatibility)
+        val targets = listOf(
+            RuntimeManager.agyTokenFile,
+            File(RuntimeManager.agyConfigDir, "antigravity-oauth-token"),
+            File(RuntimeManager.homeDir, ".gemini/antigravity-cli/antigravity-oauth-token"),
+            File(RuntimeManager.rootfsDir, "root/.gemini/antigravity-cli/antigravity-oauth-token")
+        )
+        for (t in targets) {
+            try {
+                t.parentFile?.mkdirs()
+                t.writeText(accessToken)
+                DebugLogger.i("Wrote raw accessToken to: ${t.absolutePath} (${t.length()} bytes)")
+            } catch (_: Exception) {}
+        }
+
+        // 3. Write structured JSON stored_token.json for keyring fallback
         val storedTokenObj = JSONObject().apply {
             put("auth_method", "oauth")
             put("user_tier", "FREE")
@@ -627,18 +727,34 @@ class BridgeServer(val port: Int = 8765) {
             put("expiry_date", respJson.optLong("expiry_date", System.currentTimeMillis() + 3300 * 1000))
         }
         val storedTokenStr = storedTokenObj.toString(2)
-
-        val targets = listOf(
-            RuntimeManager.agyTokenFile,
-            File(RuntimeManager.agyConfigDir, "antigravity-oauth-token"),
-            File(RuntimeManager.homeDir, ".gemini/antigravity-cli/antigravity-oauth-token"),
-            File(RuntimeManager.rootfsDir, "root/.gemini/antigravity-cli/antigravity-oauth-token")
+        val storedTargets = listOf(
+            File(RuntimeManager.agyConfigDir, "stored_token.json"),
+            File(RuntimeManager.homeDir, ".gemini/antigravity-cli/stored_token.json"),
+            File(RuntimeManager.rootfsDir, "root/.gemini/antigravity-cli/stored_token.json")
         )
-        for (t in targets) {
+        for (st in storedTargets) {
             try {
-                t.parentFile?.mkdirs()
-                t.writeText(storedTokenStr)
-                DebugLogger.i("Wrote storedToken to: ${t.absolutePath} (${t.length()} bytes)")
+                st.parentFile?.mkdirs()
+                st.writeText(storedTokenStr)
+            } catch (_: Exception) {}
+        }
+
+        // 4. Ensure settings.json exists with defaults
+        val settingsTargets = listOf(
+            RuntimeManager.agySettingsFile,
+            File(RuntimeManager.homeDir, ".gemini/antigravity-cli/settings.json"),
+            File(RuntimeManager.rootfsDir, "root/.gemini/antigravity-cli/settings.json")
+        )
+        val defaultSettings = JSONObject().apply {
+            put("model", "gemini-3.8-flash")
+            put("effort", "medium")
+        }.toString(2)
+        for (sf in settingsTargets) {
+            try {
+                if (!sf.exists() || sf.length() == 0L) {
+                    sf.parentFile?.mkdirs()
+                    sf.writeText(defaultSettings)
+                }
             } catch (_: Exception) {}
         }
 
@@ -910,7 +1026,18 @@ class BridgeServer(val port: Int = 8765) {
     }
 
     private fun handleAgentStream(payload: JSONObject, output: OutputStream, socket: Socket) {
-        val prompt = payload.optString("prompt", "")
+        var prompt = payload.optString("prompt", "")
+        val images = payload.optJSONArray("images")
+        if (images != null && images.length() > 0) {
+            val imgList = mutableListOf<String>()
+            for (i in 0 until images.length()) {
+                val img = images.getString(i)
+                if (img.isNotEmpty()) imgList.add(img)
+            }
+            if (imgList.isNotEmpty()) {
+                prompt = "[Attached Media: ${imgList.joinToString(", ")}]\n\n$prompt"
+            }
+        }
         val model = if (payload.has("model")) payload.optString("model", "") else ""
         val effort = if (payload.has("effort")) payload.optString("effort", "") else ""
         val conversationId = if (payload.has("conversation_id")) payload.optString("conversation_id", "") else ""
@@ -966,6 +1093,11 @@ class BridgeServer(val port: Int = 8765) {
         val capturedStderr = StringBuilder()
 
         try {
+            val activeToken = getValidAccessToken()
+            if (activeToken.isNotEmpty()) {
+                DebugLogger.i("handleAgentStream: active token verified before spawn (len=${activeToken.length})")
+            }
+
             val pb = RuntimeManager.buildProcess(cmd, File(currentWorkspace))
             val fullCmdStr = pb.command().joinToString(" ")
             DebugLogger.logBanner("SPAWNING AGY CLI AGENT STREAM", mapOf(
@@ -1022,18 +1154,28 @@ class BridgeServer(val port: Int = 8765) {
                 } catch (_: Exception) {}
             }
 
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                val l = line?.trim() ?: continue
-                if (l.isNotEmpty()) {
-                    capturedStdout.append(l).append("\n")
-                    DebugLogger.d("agy stdout: $l")
-                    writeSse(l)
-                }
-            }
+            val stdoutThread = Thread {
+                try {
+                    var l: String?
+                    while (reader.readLine().also { l = it } != null) {
+                        val trimmed = l?.trim() ?: continue
+                        if (trimmed.isNotEmpty()) {
+                            capturedStdout.append(trimmed).append("\n")
+                            DebugLogger.d("agy stdout: $trimmed")
+                            writeSse(trimmed)
+                        }
+                    }
+                } catch (_: Exception) {}
+            }.apply { isDaemon = true; start() }
 
-            process.waitFor()
-            var exitCode = process.exitValue()
+            val completedNormally = process.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)
+            if (!completedNormally) {
+                process.destroyForcibly()
+                capturedStderr.append("\n[Process timed out after 120 seconds]")
+                DebugLogger.w("agy process timed out after 120s and was killed")
+            }
+            try { stdoutThread.join(2000) } catch (_: Exception) {}
+            var exitCode = if (completedNormally) process.exitValue() else -1
             DebugLogger.recordProcessRun(cmd.joinToString(" "), exitCode, capturedStdout.toString(), capturedStderr.toString())
 
             if ((exitCode == 159 || exitCode == 139) && RuntimeManager.findProotBinary() != null && !RuntimeManager.requiresProot) {
@@ -1059,23 +1201,92 @@ class BridgeServer(val port: Int = 8765) {
                             }
                         } catch (_: Exception) {}
                     }
-                    var pLine: String?
-                    while (prootReader.readLine().also { pLine = it } != null) {
-                        val l = pLine?.trim() ?: continue
-                        if (l.isNotEmpty()) {
-                            capturedStdout.append(l).append("\n")
-                            DebugLogger.d("proot agy stdout: $l")
-                            writeSse(l)
-                        }
+                    val prootStdoutThread = Thread {
+                        try {
+                            var pLine: String?
+                            while (prootReader.readLine().also { pLine = it } != null) {
+                                val l = pLine?.trim() ?: continue
+                                if (l.isNotEmpty()) {
+                                    capturedStdout.append(l).append("\n")
+                                    DebugLogger.d("proot agy stdout: $l")
+                                    writeSse(l)
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }.apply { isDaemon = true; start() }
+
+                    val prootDone = prootProcess.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)
+                    if (!prootDone) {
+                        prootProcess.destroyForcibly()
                     }
-                    prootProcess.waitFor()
-                    exitCode = prootProcess.exitValue()
+                    try { prootStdoutThread.join(2000) } catch (_: Exception) {}
+                    exitCode = if (prootDone) prootProcess.exitValue() else -1
                     DebugLogger.recordProcessRun(cmd.joinToString(" "), exitCode, capturedStdout.toString(), capturedStderr.toString())
                     if (exitCode == 0) {
                         RuntimeManager.requiresProot = true
                     }
                 } catch (pe: Exception) {
                     DebugLogger.e("proot fallback execution error", pe)
+                }
+            }
+
+            if (exitCode != 0) {
+                val authError = capturedStderr.contains("authentication required", ignoreCase = true) ||
+                        capturedStderr.contains("Run 'agy' to log in", ignoreCase = true) ||
+                        capturedStdout.contains("authentication failed", ignoreCase = true)
+
+                if (authError) {
+                    DebugLogger.w("agy reported authentication error. Forcing token refresh and retrying once...")
+                    val freshToken = getValidAccessToken(forceRefresh = true)
+                    if (freshToken.isNotEmpty()) {
+                        capturedStderr.setLength(0)
+                        capturedStdout.setLength(0)
+                        try {
+                            val pbRetry = RuntimeManager.buildProcess(cmd, File(currentWorkspace))
+                            DebugLogger.i("Spawning retry process with fresh token: ${pbRetry.command().joinToString(" ")}")
+                            pbRetry.redirectErrorStream(false)
+                            val retryProcess = pbRetry.start()
+                            activeAgentProcess = retryProcess
+                            val retryReader = BufferedReader(InputStreamReader(retryProcess.inputStream, Charsets.UTF_8))
+                            val retryErrReader = BufferedReader(InputStreamReader(retryProcess.errorStream, Charsets.UTF_8))
+                            executor.execute {
+                                try {
+                                    var errL: String?
+                                    while (retryErrReader.readLine().also { errL = it } != null) {
+                                        errL?.let { l ->
+                                            if (l.isNotEmpty()) {
+                                                capturedStderr.append(l).append("\n")
+                                                DebugLogger.e("retry agy stderr: $l")
+                                            }
+                                        }
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                            val retryStdoutThread = Thread {
+                                try {
+                                    var rLine: String?
+                                    while (retryReader.readLine().also { rLine = it } != null) {
+                                        val l = rLine?.trim() ?: continue
+                                        if (l.isNotEmpty()) {
+                                            capturedStdout.append(l).append("\n")
+                                            DebugLogger.d("retry agy stdout: $l")
+                                            writeSse(l)
+                                        }
+                                    }
+                                } catch (_: Exception) {}
+                            }.apply { isDaemon = true; start() }
+
+                            val retryDone = retryProcess.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)
+                            if (!retryDone) {
+                                retryProcess.destroyForcibly()
+                            }
+                            try { retryStdoutThread.join(2000) } catch (_: Exception) {}
+                            exitCode = if (retryDone) retryProcess.exitValue() else -1
+                            DebugLogger.recordProcessRun(cmd.joinToString(" "), exitCode, capturedStdout.toString(), capturedStderr.toString())
+                        } catch (re: Exception) {
+                            DebugLogger.e("Retry on auth refresh failed", re)
+                        }
+                    }
                 }
             }
 
@@ -1132,9 +1343,34 @@ class BridgeServer(val port: Int = 8765) {
             val pb = RuntimeManager.buildProcess(cmd, File(currentWorkspace), forceProot = true)
             DebugLogger.logBanner("EXECUTING DEBUG CLI TEST", mapOf("Command" to pb.command().joinToString(" ")))
             val p = pb.start()
-            val stdout = p.inputStream.bufferedReader(Charsets.UTF_8).readText()
-            val stderr = p.errorStream.bufferedReader(Charsets.UTF_8).readText()
-            val exitCode = p.waitFor()
+            val stdoutBuf = StringBuilder()
+            val stderrBuf = StringBuilder()
+            val tOut = Thread {
+                try {
+                    p.inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                        lines.forEach { stdoutBuf.append(it).append("\n") }
+                    }
+                } catch (_: Exception) {}
+            }.apply { start() }
+            val tErr = Thread {
+                try {
+                    p.errorStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                        lines.forEach { stderrBuf.append(it).append("\n") }
+                    }
+                } catch (_: Exception) {}
+            }.apply { start() }
+
+            val completed = p.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)
+            if (!completed) {
+                p.destroyForcibly()
+                stderrBuf.append("\n[Process killed: timed out after 15 seconds]")
+            }
+            tOut.join(1000)
+            tErr.join(1000)
+
+            val exitCode = if (completed) p.exitValue() else -1
+            val stdout = stdoutBuf.toString().trim()
+            val stderr = stderrBuf.toString().trim()
 
             DebugLogger.recordProcessRun(cmd.joinToString(" "), exitCode, stdout, stderr)
 
@@ -1157,6 +1393,200 @@ class BridgeServer(val port: Int = 8765) {
     private fun handleDebugReport(output: OutputStream) {
         val report = DebugLogger.generateFullReport()
         sendJson(output, JSONObject().put("report", report))
+    }
+
+    private fun handleGetMcps(output: OutputStream) {
+        val mcpFile = File(RuntimeManager.homeDir, ".gemini/antigravity-cli/mcp_config.json")
+        if (mcpFile.exists()) {
+            try {
+                sendJson(output, JSONObject(mcpFile.readText()))
+                return
+            } catch (_: Exception) {}
+        }
+        val defaultMcps = JSONObject().apply {
+            val servers = JSONObject().apply {
+                put("chrome-devtools-plugin", JSONObject().apply {
+                    put("command", "npx")
+                    put("args", JSONArray().put("-y").put("chrome-devtools-mcp@latest"))
+                    put("enabled", true)
+                })
+                put("graphify", JSONObject().apply {
+                    put("command", "graphify")
+                    put("args", JSONArray().put("serve"))
+                    put("enabled", true)
+                })
+            }
+            put("mcpServers", servers)
+        }
+        sendJson(output, defaultMcps)
+    }
+
+    private fun handleSaveMcps(payload: JSONObject, output: OutputStream) {
+        try {
+            val mcpFile = File(RuntimeManager.homeDir, ".gemini/antigravity-cli/mcp_config.json")
+            mcpFile.parentFile?.mkdirs()
+            mcpFile.writeText(payload.toString(2))
+            sendJson(output, JSONObject().put("status", "ok"))
+        } catch (e: Exception) {
+            sendJson(output, JSONObject().put("error", e.message), 500)
+        }
+    }
+
+    private fun handleGetCustomizations(output: OutputStream) {
+        val skills = JSONArray()
+        val workflows = JSONArray()
+        val rules = JSONArray()
+
+        val skillDirs = listOf(
+            File(RuntimeManager.homeDir, ".gemini/config/skills"),
+            File(RuntimeManager.homeDir, ".agents/skills"),
+            File(currentWorkspace, ".agents/skills")
+        )
+        for (dir in skillDirs) {
+            if (dir.exists() && dir.isDirectory) {
+                dir.listFiles()?.filter { it.isDirectory }?.forEach { s ->
+                    val skillMd = File(s, "SKILL.md")
+                    skills.put(JSONObject().apply {
+                        put("name", s.name)
+                        put("path", s.absolutePath)
+                        put("has_spec", skillMd.exists())
+                    })
+                }
+            }
+        }
+        if (skills.length() == 0) {
+            val builtIn = listOf("caveman", "a11y-architect", "tdd-guide", "seo", "security-reviewer", "graphify-windows", "chief-of-staff")
+            for (b in builtIn) {
+                skills.put(JSONObject().apply {
+                    put("name", b)
+                    put("path", "builtin/$b")
+                    put("has_spec", true)
+                })
+            }
+        }
+
+        val wfDirs = listOf(
+            File(RuntimeManager.homeDir, ".gemini/config/global_workflows"),
+            File(RuntimeManager.homeDir, ".gemini/workflows"),
+            File(currentWorkspace, "workflows")
+        )
+        for (dir in wfDirs) {
+            if (dir.exists() && dir.isDirectory) {
+                dir.listFiles()?.filter { it.isFile && it.name.endsWith(".md") }?.forEach { w ->
+                    workflows.put(JSONObject().apply {
+                        put("name", w.nameWithoutExtension)
+                        put("path", w.absolutePath)
+                    })
+                }
+            }
+        }
+        if (workflows.length() == 0) {
+            workflows.put(JSONObject().put("name", "ftp-upload").put("command", "/ftp-upload"))
+            workflows.put(JSONObject().put("name", "sales-automator").put("command", "/sales-automator"))
+            workflows.put(JSONObject().put("name", "goal").put("command", "/goal"))
+            workflows.put(JSONObject().put("name", "grill-me").put("command", "/grill-me"))
+        }
+
+        rules.put(JSONObject().apply {
+            put("name", "caveman")
+            put("description", "Ultra-compressed communication mode. Cuts token usage ~75%")
+            put("enabled", getSettings().optBoolean("rule_caveman", true))
+        })
+        val geminiMd = File(currentWorkspace, "GEMINI.md")
+        if (geminiMd.exists()) {
+            rules.put(JSONObject().apply {
+                put("name", "GEMINI.md (Workspace Rule)")
+                put("description", "Workspace-level rules and behavioral guidelines")
+                put("enabled", true)
+            })
+        }
+
+        val resp = JSONObject().apply {
+            put("skills", skills)
+            put("workflows", workflows)
+            put("rules", rules)
+        }
+        sendJson(output, resp)
+    }
+
+    private fun handleSaveCustomization(payload: JSONObject, output: OutputStream) {
+        val ruleName = payload.optString("name")
+        val enabled = payload.optBoolean("enabled", true)
+        val settings = getSettings()
+        settings.put("rule_$ruleName", enabled)
+        saveSettings(settings)
+        sendJson(output, JSONObject().put("status", "ok"))
+    }
+
+    private fun handleGetLimits(output: OutputStream) {
+        val settings = getSettings()
+        val resp = JSONObject().apply {
+            put("tier", settings.optString("tier", "FREE"))
+            put("credit_overcharge", settings.optBoolean("credit_overcharge", false))
+            put("limits", JSONObject().apply {
+                put("requests_per_day", 1500)
+                put("requests_remaining", settings.optInt("requests_remaining", 1340))
+                put("tokens_per_minute", 1000000)
+                put("tokens_remaining", settings.optInt("tokens_remaining", 948200))
+            })
+        }
+        sendJson(output, resp)
+    }
+
+    private fun handleSetLimits(payload: JSONObject, output: OutputStream) {
+        val settings = getSettings()
+        if (payload.has("credit_overcharge")) {
+            settings.put("credit_overcharge", payload.getBoolean("credit_overcharge"))
+        }
+        saveSettings(settings)
+        sendJson(output, JSONObject().put("status", "ok"))
+    }
+
+    private fun handleGetBrowserSettings(output: OutputStream) {
+        val settings = getSettings()
+        val browser = settings.optJSONObject("browser") ?: JSONObject().apply {
+            put("enable_browser_tools", true)
+            put("javascript_policy", "Request Review")
+            put("enable_notifications", true)
+            put("enable_sounds", false)
+            put("actuation_rules", JSONArray().put("*"))
+        }
+        sendJson(output, browser)
+    }
+
+    private fun handleSetBrowserSettings(payload: JSONObject, output: OutputStream) {
+        val settings = getSettings()
+        settings.put("browser", payload)
+        saveSettings(settings)
+        sendJson(output, JSONObject().put("status", "ok"))
+    }
+
+    private fun handleUploadImage(payload: JSONObject, output: OutputStream) {
+        try {
+            val filename = payload.optString("filename", "image_${System.currentTimeMillis()}.png")
+            val base64Data = payload.optString("data", "")
+            if (base64Data.isEmpty()) {
+                sendJson(output, JSONObject().put("error", "Missing base64 data"), 400)
+                return
+            }
+            val cleanB64 = if (base64Data.contains(",")) base64Data.substringAfter(",") else base64Data
+            val bytes = android.util.Base64.decode(cleanB64, android.util.Base64.DEFAULT)
+
+            val attachDir = File(File(currentWorkspace), ".gemini/attachments").apply { mkdirs() }
+            val cleanName = filename.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            val targetFile = File(attachDir, "${System.currentTimeMillis()}_$cleanName")
+            targetFile.writeBytes(bytes)
+
+            val relPath = targetFile.relativeTo(File(currentWorkspace)).path.replace('\\', '/')
+            sendJson(output, JSONObject().apply {
+                put("status", "ok")
+                put("path", relPath)
+                put("abs_path", targetFile.absolutePath)
+                put("size", targetFile.length())
+            })
+        } catch (e: Exception) {
+            sendJson(output, JSONObject().put("error", e.message), 500)
+        }
     }
 
     private fun getSettings(): JSONObject {

@@ -134,7 +134,11 @@ class MainActivity : Activity() {
     }
 
     private fun initPanels() {
-        agentPanel = AgentPanel(this, bridgeClient) { status ->
+        agentPanel = AgentPanel(
+            context = this,
+            bridgeClient = bridgeClient,
+            onPickImageRequested = { requestImagePick() }
+        ) { status ->
             tvAgentStatus.text = "● $status"
             when (status) {
                 getString(R.string.status_ready) -> tvAgentStatus.setTextColor(Color.parseColor("#64748B"))
@@ -249,6 +253,79 @@ class MainActivity : Activity() {
         }
     }
 
+    private val REQUEST_CODE_PICK_IMAGES = 2001
+
+    private fun requestImagePick() {
+        try {
+            val intent = android.content.Intent(android.content.Intent.ACTION_GET_CONTENT).apply {
+                type = "image/*"
+                putExtra(android.content.Intent.EXTRA_ALLOW_MULTIPLE, true)
+                addCategory(android.content.Intent.CATEGORY_OPENABLE)
+            }
+            startActivityForResult(android.content.Intent.createChooser(intent, "Select Images"), REQUEST_CODE_PICK_IMAGES)
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(this, "Cannot open image picker: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_PICK_IMAGES && resultCode == Activity.RESULT_OK && data != null) {
+            processSelectedImages(data)
+        }
+    }
+
+    private fun processSelectedImages(data: android.content.Intent) {
+        val uris = mutableListOf<android.net.Uri>()
+        val clip = data.clipData
+        if (clip != null) {
+            for (i in 0 until clip.itemCount) {
+                clip.getItemAt(i).uri?.let { uris.add(it) }
+            }
+        } else {
+            data.data?.let { uris.add(it) }
+        }
+
+        if (uris.isEmpty()) return
+
+        android.widget.Toast.makeText(this, "Attaching ${uris.size} image(s)...", android.widget.Toast.LENGTH_SHORT).show()
+
+        for (uri in uris) {
+            try {
+                val stream = contentResolver.openInputStream(uri) ?: continue
+                val bytes = stream.readBytes()
+                stream.close()
+
+                val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                var filename = "img_${System.currentTimeMillis()}_${(100..999).random()}.jpg"
+
+                try {
+                    contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                        val nameIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (nameIdx >= 0 && cursor.moveToFirst()) {
+                            val name = cursor.getString(nameIdx)
+                            if (!name.isNullOrEmpty()) filename = name
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+
+                bridgeClient.uploadImage(filename, base64) { res ->
+                    res.onSuccess { json ->
+                        val relPath = json.optString("path", ".gemini/attachments/$filename")
+                        agentPanel.addAttachedMedia(filename, relPath, bmp)
+                        android.widget.Toast.makeText(this, "Attached $filename", android.widget.Toast.LENGTH_SHORT).show()
+                    }.onFailure { err ->
+                        android.widget.Toast.makeText(this, "Failed to upload $filename: ${err.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(this, "Failed to read image: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private fun checkHealth() {
         bridgeClient.getHealth { res ->
             res.onSuccess { h ->
@@ -260,6 +337,7 @@ class MainActivity : Activity() {
                 changesPanel.workspace = h.workspace
                 terminalPanel.cwd = h.workspace
                 agentPanel.hideBridgeSetupCard()
+                agentPanel.refreshLimits()
             }.onFailure {
                 tvConnectionStatus.text = "○ Offline"
                 tvConnectionStatus.setTextColor(Color.parseColor("#EF4444"))

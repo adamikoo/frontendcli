@@ -1,73 +1,46 @@
-# Runtime Requirements: Minimum Viable Environment Analysis
+# Runtime Requirements: Environment Specification
 
-## 1. Architectural Question: Is Ubuntu Required?
+## 1. System Architecture: Three-Tier Model
 
-**Conclusion: NO. Full Ubuntu is NOT required.**
-
-The initial Termux prototype utilized `proot-distro login ubuntu` solely as an easy path to obtain:
-1. An `aarch64` Linux glibc runtime (`libc.so.6`, `ld-linux-aarch64.so.1`, etc.).
-2. A standard Linux filesystem structure (`/etc/ssl/certs`, `/tmp`, `/bin/sh`).
-3. A pre-packaged Python 3 installation to run `server.py`.
-
-However, deep binary forensics on the real `agy` executable (`antigravity` v1.1.27) show that:
-- `agy` is a standalone compiled **Rust** native binary.
-- It does **not** link against Python, Node.js, GTK, X11, or complex distro-specific packages.
-- It depends strictly on standard `glibc` (version `>= 2.26`):
-  - `ld-linux-aarch64.so.1` (dynamic loader)
-  - `libc.so.6`
-  - `libdl.so.2`
-  - `libm.so.6`
-  - `libpthread.so.0`
-  - `libresolv.so.2`
-  - `librt.so.1`
-- These 7 shared object files total less than 3 MB!
+CLIFrontend relies on the robust, production-tested three-tier runtime environment:
+- **Tier 1**: Termux Android Host Environment (`com.termux`)
+- **Tier 2**: Ubuntu PRoot Container (managed via `proot-distro`)
+- **Tier 3**: Bridge Server Daemon (`bridge/server.py` on `127.0.0.1:8765`)
 
 ---
 
-## 2. Experimental Proof: Direct Android Kernel Execution
+## 2. Requirements Matrix
 
-On physical Android hardware (verified on POCO 2412DPC0AG, ARM64 Android 16):
-```bash
-/data/data/com.antigravity.pocketgravity/files/runtime/glibc/ld-linux-aarch64.so.1 \
-  --library-path /data/data/com.antigravity.pocketgravity/files/runtime/glibc \
-  /data/data/com.antigravity.pocketgravity/files/runtime/bin/agy --version
-```
-**Result**:
-- Output: `1.1.27`
-- Exit Code: `0`
-- Zero root permissions needed.
-- Zero `ptrace` system calls (which are often restricted or flagged by Android SELinux).
-- Zero PRoot virtualization overhead.
-- Direct execution on the native Linux kernel powering Android.
-
----
-
-## 3. The Real Minimum Environment Matrix
-
-| Component | Minimum Required | Provided By Standalone App |
+| Component | Requirement | Provider / Location |
 |---|---|---|
-| **CPU Architecture** | `arm64-v8a` (`aarch64`) | Device hardware |
-| **Kernel** | Linux `>= 3.10` (Android 8.0+) | Android OS kernel |
-| **C Library** | glibc `>= 2.26` | Bundled in `app/src/main/assets/glibc_arm64/` (~2.8 MB) |
-| **Dynamic Linker** | `ld-linux-aarch64.so.1` | Bundled in `glibc_arm64/` |
-| **Antigravity CLI** | `agy` (v1.1.27 aarch64 ELF) | Bundled in `app/src/main/assets/bin/agy_arm64.tar.gz` |
-| **CA Root Certificates** | Mozilla PEM CA bundle | Bundled in `app/src/main/assets/ca-certificates.crt` via `$SSL_CERT_FILE` |
-| **Shell for Tools** | POSIX-compatible shell | Android native `/system/bin/sh` |
-| **Bridge Daemon** | HTTP + SSE server on 127.0.0.1:8765 | Embedded pure-Kotlin daemon (`BridgeServer.kt`) running as Android Foreground Service |
-| **Disk Storage** | App-private storage (`Context.filesDir`) | Extracted on first run |
+| **CPU Architecture** | `arm64-v8a` (`aarch64`) | Android device hardware |
+| **Android OS** | Android 8.0+ (API 26+) | Host system |
+| **Terminal Host** | Termux (`com.termux`) | F-Droid / GitHub Releases |
+| **Linux Distribution** | Ubuntu 22.04+ (via `proot-distro`) | Installed via `proot-distro install ubuntu` in Termux |
+| **C Library** | GNU C Library (glibc `>= 2.31`) | Provided by Ubuntu container |
+| **Python Runtime** | Python `>= 3.8` | Installed via `apt-get install python3` in Ubuntu container |
+| **Antigravity CLI** | `agy` (v1.1.27 aarch64 Linux ELF) | Installed in `/root/.local/bin/agy` or `~/.local/bin/agy` |
+| **Bridge Daemon** | `bridge/server.py` & `bridge/start.sh` | Included in project / exported to `/sdcard/Download/frontendcli/` |
+| **Loopback Networking** | `127.0.0.1:8765` | Shared Android Linux kernel network namespace |
+| **Android App** | `CLIFrontend.apk` | Native Material IDE frontend |
 
 ---
 
-## 4. Comparison of Approaches
+## 3. Automated Environment Setup (`bridge/start.sh`)
 
-### Approach A: Full Embedded Ubuntu Distribution (PRoot)
-- **Size**: ~350 MB to 1 GB rootfs.
-- **Overhead**: PRoot intercepts every syscall using `ptrace` or `seccomp`, degrading file I/O and process spawning speeds by 2x to 5x.
-- **Failures**: Known issues with Android 14+ phantom process killing, seccomp filters, and storage permissions.
-- **Verdict**: Unnecessarily heavy, slow, and bloated.
+The provided `bridge/start.sh` script automates the entire provisioning process when launched from Termux:
+1. Detects native Termux execution environment.
+2. Automatically installs `proot-distro` if missing (`pkg install -y proot-distro`).
+3. Installs the Ubuntu rootfs if missing (`proot-distro install ubuntu`).
+4. Installs `python3` and `curl` inside the container.
+5. Acquires `termux-wake-lock` to prevent the OS from killing the bridge process.
+6. Binds `/sdcard` to `/sdcard` and `$HOME` to `/root/termux_home` inside the container.
+7. Starts `server.py` in the background, writing logs to `~/.frontendcli/bridge.log`.
 
-### Approach B: Embedded Micro-glibc Runtime (Current Recommended Solution)
-- **Size**: ~55 MB APK total (compressed).
-- **Overhead**: 0% virtualization overhead. Direct syscalls to the Android Linux kernel.
-- **Compatibility**: Runs seamlessly in app-private storage (`/data/data/com.antigravity.pocketgravity/files/`).
-- **Verdict**: Optimal, fast, minimal, and fully self-contained in a single APK.
+---
+
+## 4. Why This Architecture Works
+
+- **Zero Seccomp Violations**: Termux processes run with full terminal shell privileges, eliminating `SIGSYS` (exit code 159) traps.
+- **Native DNS Resolution**: Uses standard glibc network stack with working `/etc/resolv.conf` and `getaddrinfo()`.
+- **Background Persistence**: Native Android `termux-wake-lock` ensures long-running agent tool invocations (building, file replacement, test runs) are not suspended by OEM battery managers.

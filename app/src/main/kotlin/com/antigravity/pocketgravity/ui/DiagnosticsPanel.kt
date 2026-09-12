@@ -160,17 +160,20 @@ class DiagnosticsPanel(
             cardsContainer.removeAllViews()
 
             res.onSuccess { h ->
-                val isStandalone = h.standalone || com.antigravity.pocketgravity.api.RuntimeManager.isStandaloneRuntimeReady()
-                val runtimeTitle = if (isStandalone) "Embedded PRoot Engine" else "Termux Environment"
-                val runtimeDesc = if (isStandalone) {
-                    "Standalone Runtime Active (Embedded PRoot userspace emulation + Glibc ARM64)"
+                val termuxInstalled = try {
+                    context.packageManager.getPackageInfo("com.termux", 0) != null
+                } catch (_: Exception) { false }
+                val runtimeTitle = "Termux & Linux Environment"
+                val runtimeDesc = if (h.ubuntu) {
+                    "Termux with Ubuntu PRoot Container (glibc ready)"
+                } else if (h.termux) {
+                    "Termux Environment Active"
+                } else if (termuxInstalled) {
+                    "Termux App Installed (Launch bridge via ~/start.sh)"
                 } else {
-                    val termuxInstalled = try {
-                        context.packageManager.getPackageInfo("com.termux", 0) != null
-                    } catch (_: Exception) { false }
-                    if (termuxInstalled) "Termux App Installed" else "External bridge active"
+                    "External bridge active (${bridgeClient.baseUrl})"
                 }
-                addTierCard(runtimeTitle, true, runtimeDesc)
+                addTierCard(runtimeTitle, h.termux || h.ubuntu || termuxInstalled, runtimeDesc)
 
                 addTierCard("Bridge Daemon", true, "Connected to ${bridgeClient.baseUrl} (${h.workspace})")
 
@@ -288,8 +291,14 @@ class DiagnosticsPanel(
                 cardsContainer.addView(actionRow)
                 addConsoleCard()
             }.onFailure { err ->
-                val standaloneReady = com.antigravity.pocketgravity.api.RuntimeManager.isStandaloneRuntimeReady()
-                addTierCard("Embedded PRoot Engine", standaloneReady, if (standaloneReady) "Standalone Runtime files ready" else "Initializing runtime assets...")
+                val termuxInstalled = try {
+                    context.packageManager.getPackageInfo("com.termux", 0) != null
+                } catch (_: Exception) { false }
+                addTierCard(
+                    "Termux Environment",
+                    termuxInstalled,
+                    if (termuxInstalled) "Termux installed. Launch bridge via bash ~/start.sh" else "Termux app not detected. Install Termux from F-Droid."
+                )
                 addTierCard("Bridge Daemon", false, "Bridge offline at ${bridgeClient.baseUrl} (${err.message ?: "Connection refused"})")
 
                 val helperBox = LinearLayout(context).apply {
@@ -303,7 +312,7 @@ class DiagnosticsPanel(
                 }
 
                 val promptTitle = TextView(context).apply {
-                    text = "⚡ Engine & Bridge Launcher"
+                    text = "⚡ Launch Bridge in Termux"
                     setTextColor(Color.parseColor("#F1F5F9"))
                     textSize = 13.5f
                     typeface = Typeface.DEFAULT_BOLD
@@ -311,7 +320,7 @@ class DiagnosticsPanel(
                 helperBox.addView(promptTitle)
 
                 val promptDesc = TextView(context).apply {
-                    text = "Tap 'Start Engine' to launch the in-app standalone engine, or copy the Termux launcher command below:"
+                    text = "Open Termux and launch the bridge daemon with the command below:"
                     setTextColor(Color.parseColor("#94A3B8"))
                     textSize = 11.5f
                     setPadding(0, 6, 0, 10)

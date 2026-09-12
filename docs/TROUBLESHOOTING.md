@@ -1,58 +1,73 @@
-# Troubleshooting PocketGravity & Standalone Antigravity IDE
+# Troubleshooting Guide
 
-## 1. Standalone Embedded Engine
+## 1. Bridge Connection Issues ("Bridge Offline")
 
-### First Run Asset Initialization
-On the very first launch, the app unpacks:
-- The glibc ARM64 dynamic loader (`ld-linux-aarch64.so.1`) and system libraries.
-- The Mozilla Root CA certificates bundle (`ca-certificates.crt`).
-- The official Antigravity CLI binary (`agy_arm64`).
+### Symptom
+The app displays `"Bridge Offline at http://127.0.0.1:8765"` or Diagnostics indicates Bridge Daemon is red.
 
-If you tap Send immediately after opening a fresh install, you may see:
-`"⚠️ Antigravity CLI binary not ready. The embedded runtime is initializing or extracting assets."`
-- **Solution**: The extraction completes within 3 to 8 seconds depending on device flash speed. Wait a moment and check **Diagnostics** panel to confirm all indicators show green `✓`.
-
-### Daemon Not Running / Connection Offline
-The embedded engine runs as a native Android Foreground Service with an ongoing notification.
-- Tap **Diagnostics** (top right icon) to see current health.
-- Tap **🚀 Start Engine** if the daemon was stopped.
-- Ensure Android's Battery Optimization is set to **"Unrestricted"** for PocketGravity so Android OS does not sleep the foreground service during long AI operations.
+### Resolution Steps
+1. **Open Termux** on your device.
+2. Check if the bridge is running:
+   ```bash
+   bash ~/start.sh status
+   ```
+3. If not running, start it:
+   ```bash
+   bash ~/start.sh start
+   ```
+4. Verify port 8765 responds locally:
+   ```bash
+   curl -s http://127.0.0.1:8765/api/health
+   ```
+5. Inspect logs for any errors:
+   ```bash
+   cat ~/.frontendcli/bridge.log
+   ```
 
 ---
 
-## 2. Authentication & Google Login
+## 2. Antigravity CLI Not Found
+
+### Symptom
+Diagnostics shows `"Antigravity CLI (agy) not found in Linux environment"`.
+
+### Resolution Steps
+1. In Termux or inside your Ubuntu PRoot container, verify `agy` is installed:
+   ```bash
+   which agy || ls -la ~/.local/bin/agy || ls -la /root/.local/bin/agy
+   ```
+2. If missing, ensure `agy` is placed in `~/.local/bin/agy` and marked executable:
+   ```bash
+   chmod +x ~/.local/bin/agy
+   ```
+3. Test running `agy --version` directly in the shell to confirm it returns `1.1.27`.
+
+---
+
+## 3. Google Authentication & OAuth
 
 ### "Google Authentication Required"
-- PocketGravity uses standard RFC 7636 PKCE Google OAuth.
-- Navigate to **Settings** or **Diagnostics**, tap **Sign in with Google**.
-- Complete authentication in your mobile browser. Google redirects back to `http://127.0.0.1:8765/oauth2callback`, where the token is automatically exchanged and saved into your private sandbox.
-- Alternatively, if you already have an active Antigravity CLI token, tap **Paste Token** and paste your OAuth access token.
+- In CLIFrontend, go to **Settings** or **Diagnostics** and tap **Sign in with Google**.
+- Complete authentication in your browser. The redirect will send the authorization code to the bridge to complete the token exchange.
+- Alternatively, if you have a valid token: tap **Paste OAuth Token** and paste your token string directly.
 
 ### 403 Errors Eliminated
-- Direct raw calls to `cloudcode-pa.googleapis.com` are blocked by Google for personal accounts with `SUBSCRIPTION_REQUIRED`.
-- The standalone engine ALWAYS spawns the official `agy` binary with `--output-format stream-json`, which uses Google's authorized consumer routing protocols.
+- Direct calls to `cloudcode-pa.googleapis.com` are rejected for consumer Google accounts.
+- The bridge exclusively spawns the official `agy` binary with `--output-format stream-json`, which uses Google's authorized consumer routing protocols.
 
 ---
 
-## 3. Network & SSL Certificate Verification
-- Android does not place standard Linux CA bundles in `/etc/ssl/certs/ca-certificates.crt`.
-- PocketGravity automatically configures `SSL_CERT_FILE` pointing to `/data/data/com.antigravity.pocketgravity/files/runtime/ca-certificates.crt`.
-- Never disable TLS verification. If a network error occurs, check your cellular/Wi-Fi connection.
+## 4. Background Persistence & Sleep Prevention
 
----
+### Symptom
+Long code generation turns stop when the screen turns off or the app is minimized.
 
-## 4. Workspaces & File Permissions
-- The default workspace is isolated in:
-  `/data/data/com.antigravity.pocketgravity/files/workspace/`
-- Standard POSIX permissions (`chmod`, file execution, directory creation) are 100% supported.
-- You can create, edit, delete, and inspect unified Git diffs directly inside this workspace.
-
----
-
-## 5. Legacy Termux / External Daemon Fallback (Optional)
-If you wish to connect PocketGravity to an external Termux daemon running on your device or a remote PC:
-1. Start your bridge daemon:
+### Resolution Steps
+1. In Termux, ensure wake-lock is acquired:
    ```bash
-   python3 bridge/server.py
+   termux-wake-lock
    ```
-2. In PocketGravity **Settings** -> **Bridge URL**, change `http://127.0.0.1:8765` to your desired host/port.
+2. In Android Settings -> Apps -> **Termux**:
+   - Set Battery usage to **"Unrestricted"**.
+3. In Android Settings -> Apps -> **CLIFrontend**:
+   - Set Battery usage to **"Unrestricted"**.
